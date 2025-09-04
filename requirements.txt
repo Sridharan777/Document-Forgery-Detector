@@ -9,4 +9,3 @@ streamlit==1.26.0
 imageio
 gdown
 
-print("✅ Minimal requirements.txt created successfully!")
