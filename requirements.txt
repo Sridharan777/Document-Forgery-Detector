@@ -1,0 +1,13 @@
+torch==2.0.1
+torchvision==0.15.2
+albumentations==1.3.1
+opencv-python-headless==4.8.1.78
+pandas==2.0.3
+matplotlib==3.7.1
+pytorch-grad-cam==1.4.8
+streamlit==1.26.0
+imageio==2.31.1
+gdown==4.7.1
+tqdm==4.65.0
+
+print("✅ requirements.txt created successfully!")
