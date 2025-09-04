@@ -1,0 +1,13 @@
+torch
+torchvision
+albumentations
+opencv-python
+pandas
+matplotlib
+grad-cam
+streamlit
+imageio
+gdown
+tqdm
+
+print("✅ requirements.txt created successfully!")
