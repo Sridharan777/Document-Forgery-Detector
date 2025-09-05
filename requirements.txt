@@ -1,11 +1,8 @@
 streamlit==1.49.1
 torch==2.8.0
 torchvision==0.23.0
-opencv-python-headless
-albumentations==2.0.8
-pandas
-matplotlib
-imageio
-Pillow
-reportlab
 gdown
+plotly
+pillow
+opencv-python-headless
+numpy
