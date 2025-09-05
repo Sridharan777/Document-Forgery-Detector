@@ -1,3 +1,14 @@
+import subprocess
+import sys
+
+# --- Dynamic install for pytorch-grad-cam if missing ---
+try:
+    import pytorch_grad_cam
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pytorch-grad-cam"])
+    import pytorch_grad_cam
+
+
 import streamlit as st
 import os, io
 import numpy as np
