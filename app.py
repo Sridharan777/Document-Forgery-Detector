@@ -130,7 +130,11 @@ if uploaded_file is not None:
         overlay = overlay_heatmap_on_image(img_rgb_resized, cam)
         st.image(overlay, caption="Model Attention (Grad-CAM)", use_column_width=True)
 
-        buf = io.BytesIO()
-        imageio.imwrite(buf, overlay)
+        from PIL import Image
+        buf = BytesIO()
+        # Convert to uint8 and ensure RGB mode
+        overlay_img = Image.fromarray((overlay * 255).astype("uint8")).convert("RGB")
+        overlay_img.save(buf, format="PNG")
         buf.seek(0)
-        st.download_button("Download heatmap", buf, file_name="heatmap.png", mime="image/png")
+        st.image(buf, caption="Grad-CAM Heatmap", use_container_width=True)
+
