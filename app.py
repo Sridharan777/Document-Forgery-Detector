@@ -128,7 +128,7 @@ if uploaded_file is not None:
     with st.spinner("Generating Grad-CAM heatmap..."):
         cam = gradcam_heatmap(model, tensor, model.layer4[-1])
         overlay = overlay_heatmap_on_image(img_rgb_resized, cam)
-        st.image(overlay, caption="Model Attention (Grad-CAM)", use_column_width=True)
+        st.image(overlay, caption="Model Attention (Grad-CAM)", use_container_width=True)
 
         from PIL import Image
         buf = BytesIO()
