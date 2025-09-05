@@ -8,6 +8,8 @@ from torchvision import models
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import imageio
+from io import BytesIO
+
 
 # ---------------------------
 # CONFIG
