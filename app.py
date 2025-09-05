@@ -1,101 +1,132 @@
 import streamlit as st
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
+from torchvision import models
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import cv2
 import numpy as np
-import imageio
-from PIL import Image
 from io import BytesIO
-import base64
-import matplotlib.pyplot as plt
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-import tempfile
+from PIL import Image
+import imageio
+import gdown
 import os
 
-# --- LOAD MODEL ---
+# -------------------------------
+# 1️⃣ CONFIG
+# -------------------------------
+MODEL_PATH = "models/best_resnet18.pth"
+MODEL_DRIVE_ID = "1yySFeUxgcN0uqiGbenRCIxhKlhgDwQFJ"
+IMG_SIZE = 224
+CLASS_NAMES = ["Real Receipt", "Fake Receipt"]
+
+# -------------------------------
+# 2️⃣ DOWNLOAD MODEL (if missing)
+# -------------------------------
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        st.warning("Model not found locally. Downloading from Google Drive...")
+        os.makedirs("models", exist_ok=True)
+        url = f"https://drive.google.com/uc?id={MODEL_DRIVE_ID}"
+        gdown.download(url, MODEL_PATH, quiet=False)
+
+# -------------------------------
+# 3️⃣ LOAD MODEL SAFELY
+# -------------------------------
 @st.cache_resource
 def load_model():
-    model = torch.load("models/best_resnet18.pth", map_location=torch.device('cpu'))
-    model.eval()
-    return model
+    try:
+        download_model()
+        model = models.resnet18(weights=None)
+        model.fc = nn.Linear(model.fc.in_features, len(CLASS_NAMES))
+        model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device("cpu")))
+        model.eval()
+        return model
+    except Exception as e:
+        st.error(f"⚠️ Failed to load model: {e}")
+        return None
 
-model = load_model()
+# -------------------------------
+# 4️⃣ IMAGE PREPROCESSING
+# -------------------------------
+def preprocess_image(image):
+    transform = A.Compose([
+        A.Resize(IMG_SIZE, IMG_SIZE),
+        A.Normalize(),
+        ToTensorV2()
+    ])
+    image_np = np.array(image)
+    image = transform(image=image_np)["image"]
+    return image.unsqueeze(0)
 
-# --- TRANSFORMS ---
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
-
-# --- PREDICTION FUNCTION ---
-def predict_image(img):
-    tensor = transform(img).unsqueeze(0)
+# -------------------------------
+# 5️⃣ PREDICTION FUNCTION
+# -------------------------------
+def predict_image(model, image):
     with torch.no_grad():
-        outputs = model(tensor)
+        outputs = model(image)
         probs = torch.nn.functional.softmax(outputs, dim=1)
-        confidence, predicted = torch.max(probs, 1)
-    return predicted.item(), confidence.item()
+        conf, predicted = torch.max(probs, 1)
+        return CLASS_NAMES[predicted], conf.item()
 
-# --- PDF REPORT FUNCTION ---
-def generate_pdf_report(image, prediction, confidence):
-    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    c = canvas.Canvas(tmp_file.name, pagesize=letter)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(200, 750, "Forgery Detection Report")
-    c.setFont("Helvetica", 12)
-    c.drawString(100, 700, f"Prediction: {'FORGED' if prediction==1 else 'AUTHENTIC'}")
-    c.drawString(100, 680, f"Confidence: {confidence*100:.2f}%")
+# -------------------------------
+# 6️⃣ GRAD-CAM FUNCTION (Optional Visualization)
+# -------------------------------
+def generate_gradcam(model, image):
+    # Simple Grad-CAM implementation
+    image = image.requires_grad_()
+    model.zero_grad()
+    outputs = model(image)
+    class_idx = outputs.argmax(dim=1)
+    outputs[0, class_idx].backward()
 
-    # Save uploaded image temporarily and draw it
-    img_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
-    image.save(img_path)
-    c.drawImage(img_path, 100, 400, width=200, height=200)
-    c.save()
-    return tmp_file.name
+    gradients = model.layer4[1].conv2.weight.grad
+    pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
+    activations = model.layer4[1].conv2(image).detach()
 
-# --- APP UI ---
-st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
+    for i in range(activations.shape[1]):
+        activations[:, i, :, :] *= pooled_gradients[i]
+
+    heatmap = torch.mean(activations, dim=1).squeeze()
+    heatmap = np.maximum(heatmap, 0)
+    heatmap /= heatmap.max()
+    heatmap = cv2.resize(heatmap.numpy(), (IMG_SIZE, IMG_SIZE))
+    return heatmap
+
+# -------------------------------
+# 7️⃣ STREAMLIT UI
+# -------------------------------
 st.title("🧾 Receipt Forgery Detector")
-st.markdown("Upload one or more receipts to check if they are **forged or authentic**.")
+st.write("Upload a receipt image to detect if it is **Real** or **Fake**.")
 
-# Sidebar info
-with st.sidebar:
-    st.header("ℹ️ Model Info")
-    st.write("- **Model:** ResNet18")
-    st.write("- **Dataset:** FindItAgain (988 receipts, 163 forgeries)")
-    st.write("- **Accuracy:** ~92% on validation set")
-    st.write("- **Explainability:** Grad-CAM")
+uploaded_file = st.file_uploader("Upload Receipt", type=["jpg", "jpeg", "png"])
 
-# File uploader
-uploaded_files = st.file_uploader("Upload receipts (PNG/JPG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-# Grad-CAM toggle
-show_heatmap = st.checkbox("Show Grad-CAM Heatmap", value=True)
+    model = load_model()
+    if model:
+        input_tensor = preprocess_image(image)
+        label, confidence = predict_image(model, input_tensor)
 
-if uploaded_files:
-    for file in uploaded_files:
-        img = Image.open(file).convert("RGB")
-        st.subheader(f"🖼 {file.name}")
+        st.subheader(f"Prediction: **{label}**")
+        st.write(f"Confidence: **{confidence*100:.2f}%**")
 
-        prediction, confidence = predict_image(img)
+        # Grad-CAM visualization
+        heatmap = generate_gradcam(model, input_tensor)
+        overlay = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+        overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+        blended = cv2.addWeighted(np.array(image.resize((IMG_SIZE, IMG_SIZE))), 0.5, overlay, 0.5, 0)
 
-        # Show confidence bar
-        st.progress(confidence)
-        st.write(f"**Prediction:** {'🔥 FORGED 🔥' if prediction==1 else '✅ AUTHENTIC ✅'}")
-        st.write(f"**Confidence:** {confidence*100:.2f}%")
+        st.image(blended, caption="Model Attention (Grad-CAM)", use_container_width=True)
 
-        if show_heatmap:
-            st.info("Grad-CAM heatmap visualization coming here (future enhancement).")
-
-        # Generate PDF report
-        pdf_path = generate_pdf_report(img, prediction, confidence)
-        with open(pdf_path, "rb") as pdf_file:
-            pdf_bytes = pdf_file.read()
-            b64 = base64.b64encode(pdf_bytes).decode()
-            href = f'<a href="data:application/pdf;base64,{b64}" download="report_{file.name}.pdf">📥 Download Report</a>'
-            st.markdown(href, unsafe_allow_html=True)
+        # Download button
+        buf = BytesIO()
+        Image.fromarray(blended).save(buf, format="PNG")
+        buf.seek(0)
+        st.download_button("Download Heatmap", buf, file_name="heatmap.png", mime="image/png")
 
 else:
-    st.warning("Please upload at least one receipt to proceed.")
+    st.info("👆 Please upload an image to start.")
