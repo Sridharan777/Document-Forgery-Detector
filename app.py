@@ -401,4 +401,4 @@ for i, uploaded in enumerate(uploaded_files):
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("<div class='footer'>Built with ❤️ — add your name and GitHub link in the sidebar.</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>Built with ❤️ — Sridharan and GitHub link in the sidebar.</div>", unsafe_allow_html=True)
