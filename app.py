@@ -234,7 +234,7 @@ BASE_CARD_CSS = """
 """
 
 # ---------------- STREAMLIT UI ----------------
-st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
+st.set_page_config(page_title="Document Forgery Detector", layout="wide")
 st.markdown(BASE_CARD_CSS, unsafe_allow_html=True)
 
 # Sidebar content
