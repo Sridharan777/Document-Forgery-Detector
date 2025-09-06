@@ -209,4 +209,5 @@ else:
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** {confidence*100:.2f}%")
 
-        color = "#2ecc71" if "GENUINE" in label
+        color = "#2ecc71" if "GENUINE" in label else "#e74c3c"
+
