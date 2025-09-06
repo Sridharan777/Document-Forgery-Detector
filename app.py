@@ -1,4 +1,4 @@
-# app.py — Modern iPhone-style UI
+# app.py — iPhone Pro / Glassmorphism UI
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -22,42 +22,44 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD  = (0.229, 0.224, 0.225)
 
-# ---------------- CSS (Neumorphic + iPhone style) ----------------
+# ---------------- GLASSMORPHISM / iOS CSS ----------------
 STYLES = """
 <style>
-/* General body */
-body { font-family: 'Helvetica Neue', sans-serif; }
+body { font-family: 'Helvetica Neue', sans-serif; background: linear-gradient(145deg,#d7e1ec,#f9faff); }
 
-/* Card style */
+/* Glass cards */
 .result-card {
-    border-radius: 20px;
-    padding: 20px;
-    margin: 12px 0;
-    background: linear-gradient(145deg, #f0f0f3, #cacaca);
-    box-shadow: 9px 9px 16px #bebebe, -9px -9px 16px #ffffff;
-    transition: transform 0.2s, box-shadow 0.2s;
+    border-radius: 25px;
+    padding: 25px;
+    margin: 15px 0;
+    background: rgba(255,255,255,0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
-.result-card:hover { transform: translateY(-4px); box-shadow: 12px 12px 20px #bebebe, -12px -12px 20px #ffffff; }
+.result-card:hover { transform: translateY(-6px); box-shadow: 0 12px 40px 0 rgba(31,38,135,0.25); }
 
-.result-title { font-size:20px; font-weight:700; margin-bottom:10px; }
+.result-title { font-size:22px; font-weight:700; margin-bottom:12px; }
 .small-muted { color: #555; font-size:13px; }
-.footer { color:#888; font-size:13px; margin-top:15px; text-align:center; }
+.footer { color:#777; font-size:13px; margin-top:20px; text-align:center; }
 
 /* Buttons */
 .stDownloadButton>button { 
-    border-radius: 12px;
-    background: linear-gradient(90deg, #4facfe, #00f2fe);
-    color:white; 
-    font-weight:600;
+    border-radius: 15px;
+    background: linear-gradient(90deg,#6a11cb,#2575fc);
+    color:white; font-weight:700; padding:10px 20px;
+    transition: transform 0.2s ease;
 }
+.stDownloadButton>button:hover { transform: translateY(-3px); }
 
-/* Dark theme overrides */
-body.dark-mode .result-card {
-    background: #1b1b1f;
-    box-shadow: 9px 9px 16px #111, -9px -9px 16px #24242a;
-    color: #e6eef8;
-}
+/* Dark mode overrides */
+body.dark-mode { background: linear-gradient(145deg,#1e1e1f,#2a2a2d); color:#eee; }
+body.dark-mode .result-card { background: rgba(28,28,30,0.45); box-shadow: 0 8px 32px rgba(0,0,0,0.35); color:#e6eef8; }
 body.dark-mode .small-muted { color:#aaa; }
+
+/* File uploader style */
+.css-1avcm0n { border-radius: 20px !important; }
 </style>
 """
 
@@ -65,7 +67,7 @@ body.dark-mode .small-muted { color:#aaa; }
 st.set_page_config(page_title="Document Forgery Detector", layout="wide")
 st.markdown(STYLES, unsafe_allow_html=True)
 
-# Sidebar
+# ---------------- SIDEBAR ----------------
 st.sidebar.title("🧾 Document Forgery Detector")
 st.sidebar.write("Grad-CAM explainability")
 st.sidebar.header("Model")
@@ -74,12 +76,12 @@ if FALLBACK_GDRIVE_ID:
     st.sidebar.write("- Fallback Drive id configured.")
 
 st.sidebar.header("UI / Display")
-theme_dark = st.sidebar.checkbox("Dark mode accents", value=False)
-colormap_choice = st.sidebar.selectbox("Grad-CAM colormap", ["JET", "VIRIDIS", "HOT", "BONE"])
+theme_dark = st.sidebar.checkbox("Enable Dark Mode", value=False)
+colormap_choice = st.sidebar.selectbox("Grad-CAM colormap", ["JET","VIRIDIS","HOT","BONE"])
 st.sidebar.write(f"Device: `{DEVICE}`")
 
 st.title("🧾 Document Forgery Detector")
-st.caption("Upload receipt or document images to see predictions, confidence & Grad-CAM overlays.")
+st.caption("Upload receipt images to see predictions, confidence & Grad-CAM with iOS-style UI.")
 
 # ---------------- MODEL LOADING ----------------
 @st.cache_resource(show_spinner=True)
@@ -91,9 +93,8 @@ def load_model():
         ckpt = torch.load(MODEL_PATH, map_location="cpu")
         state_dict = ckpt.get('state_dict', ckpt) if isinstance(ckpt, dict) else ckpt
         new_state = {k.replace("module.", ""):v for k,v in state_dict.items()}
-        out_features = 2
         model = models.resnet50(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, out_features)
+        model.fc = nn.Linear(model.fc.in_features, 2)
         model.load_state_dict(new_state, strict=False)
         model.to(DEVICE).eval()
         return model
@@ -103,33 +104,24 @@ def load_model():
 
 with st.spinner("Loading model..."):
     model = load_model()
-if model is None:
-    st.stop()
+if model is None: st.stop()
 
 # ---------------- IMAGE PROCESSING ----------------
-def pil_to_tensor(img_pil: Image.Image):
-    transform = transforms.Compose([
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-    ])
+def pil_to_tensor(img_pil):
+    transform = transforms.Compose([transforms.Resize((IMG_SIZE,IMG_SIZE)),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize(mean=IMAGENET_MEAN,std=IMAGENET_STD)])
     return transform(img_pil).unsqueeze(0).to(DEVICE)
 
 def predict_single(model, input_tensor):
     with torch.no_grad():
         out = model(input_tensor)
-        if out.shape[1] == 1:
-            prob = torch.sigmoid(out)[0,0].item()
-            label = "FORGED 🔴" if prob>=0.5 else "GENUINE 🟢"
-            conf = prob if prob>=0.5 else 1-prob
-        else:
-            probs = torch.softmax(out, dim=1)[0]
-            idx = int(torch.argmax(probs).item())
-            label = "FORGED 🔴" if idx==1 else "GENUINE 🟢"
-            conf = float(probs[idx].item())
+        probs = torch.softmax(out, dim=1)[0]
+        idx = int(torch.argmax(probs).item())
+        label = "FORGED 🔴" if idx==1 else "GENUINE 🟢"
+        conf = float(probs[idx].item())
     return label, conf, out
 
-# ---------------- GRAD-CAM ----------------
 def compute_gradcam(model, input_tensor, target_layer=None):
     activations, gradients = [], []
     if target_layer is None: target_layer = model.layer4[-1]
@@ -138,7 +130,7 @@ def compute_gradcam(model, input_tensor, target_layer=None):
     except: bh = target_layer.register_backward_hook(lambda m,gi,go: gradients.append(go[0].detach().cpu()))
     model.zero_grad()
     out = model(input_tensor)
-    score = out[:,0].sum() if out.shape[1]==1 else out[0,int(torch.argmax(out, dim=1)[0].item())]
+    score = out[0,int(torch.argmax(out,dim=1)[0].item())]
     score.backward()
     grads = gradients[0].squeeze(0); acts = activations[0].squeeze(0)
     weights = grads.mean(dim=(1,2))
@@ -165,7 +157,7 @@ def make_zip_download(original_pil, overlay_arr, filename_prefix):
 
 # ---------------- FILE UPLOADER ----------------
 uploaded_files = st.file_uploader("Upload receipt images (png/jpg)", type=["png","jpg","jpeg"], accept_multiple_files=True)
-if not uploaded_files: st.info("Upload at least one image to start."); st.stop()
+if not uploaded_files: st.info("Upload at least one image."); st.stop()
 
 show_heatmap = st.checkbox("Show Grad-CAM heatmap", value=True)
 show_gauge = st.checkbox("Show Confidence Gauge", value=True)
@@ -177,23 +169,19 @@ for i, uploaded in enumerate(uploaded_files):
     except: st.error(f"Cannot open {uploaded.name}"); continue
     input_tensor = pil_to_tensor(pil_img)
     label, confidence, raw_out = predict_single(model, input_tensor)
-    is_genuine = "GENUINE" in label
-    accent = "#2ecc71" if is_genuine else "#e74c3c"
+    accent = "#4cd137" if "GENUINE" in label else "#ff4757"
+
     col1, col2 = st.columns([1,1])
 
-    # LEFT: Prediction Card
+    # LEFT: Prediction card
     with col1:
         st.markdown(f"<div class='result-card'><div class='result-title'>Prediction: {label}</div>", unsafe_allow_html=True)
         st.image(pil_img, caption="Uploaded", width='stretch')
-        st.markdown(f"<div class='small-muted'>Raw output: {raw_out.shape}</div>", unsafe_allow_html=True)
         if show_bar:
-            bar_html = f"""
-            <div style='width:100%; background:#eee; border-radius:12px; margin-top:8px;'>
-            <div style='width:{confidence*100:.2f}%; background:{accent}; padding:8px; text-align:center; color:white; font-weight:700; border-radius:12px;'>{confidence*100:.2f}%</div></div>
-            """
+            bar_html = f"<div style='width:100%;background:rgba(255,255,255,0.2);border-radius:15px;margin-top:10px;'><div style='width:{confidence*100:.2f}%;background:{accent};padding:8px;text-align:center;color:white;font-weight:700;border-radius:15px;'>{confidence*100:.2f}%</div></div>"
             st.markdown(bar_html, unsafe_allow_html=True)
         if show_gauge:
-            fig = go.Figure(go.Indicator(mode="gauge+number", value=confidence*100, title={'text':"Confidence (%)"}, 
+            fig = go.Figure(go.Indicator(mode="gauge+number", value=confidence*100, title={'text':"Confidence (%)"},
                                          gauge={'axis':{'range':[0,100]}, 'bar':{'color':accent},
                                                 'steps':[{'range':[0,50],'color':'lightcoral'},{'range':[50,100],'color':'lightgreen'}]}))
             st.plotly_chart(fig, use_container_width=True)
@@ -208,7 +196,8 @@ for i, uploaded in enumerate(uploaded_files):
                 if cam is not None:
                     overlay = overlay_heatmap_on_pil(pil_img, cam, cmap_name=colormap_choice)
                     st.image(overlay, caption="Grad-CAM Overlay", width='stretch')
-                    st.download_button("Download Overlay PNG", data=BytesIO(Image.fromarray(overlay).tobytes()), file_name=f"{uploaded.name}_overlay.png", mime="image/png")
+                    zip_bytes = make_zip_download(pil_img, overlay, os.path.splitext(uploaded.name)[0])
+                    st.download_button("Download Original + Overlay (ZIP)", data=zip_bytes, file_name=f"{uploaded.name}_images.zip", mime="application/zip")
         st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<div class='footer'>Built with ❤️ — Sridharan</div>", unsafe_allow_html=True)
