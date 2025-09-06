@@ -234,12 +234,12 @@ BASE_CARD_CSS = """
 """
 
 # ---------------- STREAMLIT UI ----------------
-st.set_page_config(page_title="Document Forgery Detector", layout="wide")
+st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
 st.markdown(BASE_CARD_CSS, unsafe_allow_html=True)
 
 # Sidebar content
-st.sidebar.title("🧾 Document Forgery Detector")
-st.sidebar.write(" Grad-CAM explainability")
+st.sidebar.title("🧾 Receipt Forgery Detector")
+st.sidebar.write("ResNet50 + Grad-CAM explainability")
 st.sidebar.markdown("---")
 st.sidebar.header("Model")
 st.sidebar.write(f"Model path: `{MODEL_PATH}`")
@@ -254,8 +254,8 @@ st.sidebar.write("Tip: Try both genuine and forged receipts to test Grad-CAM.")
 st.sidebar.markdown("---")
 st.sidebar.write(f"Device: `{DEVICE}`")
 
-st.title("🧾 Document Forgery Detector ")
-st.caption("Upload a receipt or document to see prediction, confidence and Grad-CAM.")
+st.title("🧾 Receipt Forgery Detector — ResNet50 (Explainable)")
+st.caption("Upload a receipt and see prediction, confidence and Grad-CAM.")
 
 # Dark/light UI styles (card bg/text)
 if theme_dark:
@@ -401,4 +401,4 @@ for i, uploaded in enumerate(uploaded_files):
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("<div class='footer'>Built with ❤️ — Sridharan and GitHub link in the sidebar.</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>Built with ❤️ — add your name and GitHub link in the sidebar.</div>", unsafe_allow_html=True)
