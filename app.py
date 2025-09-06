@@ -1,4 +1,4 @@
-# app.py — FINAL UPGRADED VERSION
+# app.py — Compact 3-Column Layout with Gauge
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -17,8 +17,7 @@ FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 
-# Layout constraints (preserve aspect ratio but limit size)
-MAX_HEIGHT, MAX_WIDTH = 500, 350
+MAX_HEIGHT, MAX_WIDTH = 450, 350  # controlled aspect ratio for both images
 
 # ---------------- HELPERS ----------------
 def download_model_if_missing(gdrive_id: str):
@@ -131,15 +130,13 @@ def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
 # ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
 
-# Dark/Light Theme
 theme_dark = st.sidebar.checkbox("🌗 Dark Mode", value=False)
 if theme_dark:
     st.markdown("<style>body, .stApp {background-color:#0e1117;color:white;}</style>", unsafe_allow_html=True)
 else:
     st.markdown("<style>body, .stApp {background-color:white;color:black;}</style>", unsafe_allow_html=True)
 
-st.title("🧾 Receipt Forgery Detector")
-st.caption("Upload receipts and get prediction + Grad-CAM explainability")
+st.markdown("<h2 style='text-align:center;'>🧾 Receipt Forgery Detector</h2>", unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader("Upload receipt image(s)", type=["png","jpg","jpeg"], accept_multiple_files=True)
 if not uploaded_files: st.stop()
@@ -153,15 +150,10 @@ for i, uploaded in enumerate(uploaded_files):
     input_tensor = pil_to_tensor(pil_img)
     label, confidence, raw_out = predict_single(model, input_tensor)
 
-    col1, col2 = st.columns([1, 1])
+    # 3-column layout: image | gradcam | gauge
+    col1, col2, col3 = st.columns([1.3, 1.3, 0.8], gap="small")
     with col1:
         st.image(resized_img, caption=f"Uploaded Receipt ({label})", use_container_width=False)
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number", value=confidence*100,
-            title={'text': "Confidence (%)"},
-            gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"}}
-        ))
-        st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
 
     with col2:
         with st.spinner("Generating Grad-CAM..."):
@@ -169,3 +161,12 @@ for i, uploaded in enumerate(uploaded_files):
             overlay = overlay_heatmap_on_pil(pil_img, cam)
             overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
             st.image(overlay_resized, caption="Grad-CAM Overlay", use_container_width=False)
+
+    with col3:
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number", value=confidence*100,
+            title={'text': "Confidence (%)"},
+            gauge={'axis': {'range': [0, 100]},
+                   'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"}}
+        ))
+        st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
