@@ -220,7 +220,7 @@ else:
                     ]
                 }
             ))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{uploaded.name}")
 
         if show_heatmap:
             with st.spinner("Generating Grad-CAM..."):
