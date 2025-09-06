@@ -1,6 +1,6 @@
 # app.py
 """
-Receipt Forgery Detector — ResNet50 + Grad-CAM + Modern SaaS UI
+Receipt Forgery Detector — ResNet50 + Grad-CAM + Compact SaaS UI
 """
 
 import streamlit as st
@@ -21,27 +21,41 @@ import time
 # ---------------- CONFIG ----------------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
-FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"  # optional fallback
+FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
-CARD_CSS = """
+# Compact UI styles
+BASE_CSS = """
 <style>
+body, .stApp { font-size: 14px; }
 .result-card {
-  border-radius: 14px;
-  padding: 14px;
-  margin: 10px 0;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 6px 0;
   background-color: white;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
 }
 .result-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
-.footer { color: #999; font-size:12px; margin-top: 18px; }
+.header-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.header-title {
+  font-size: 22px;
+  font-weight: 700;
+  grid-column: 2;
+}
+.footer { color: #999; font-size: 11px; margin-top: 12px; text-align:center; }
 </style>
 """
 
@@ -179,33 +193,19 @@ def overlay_heatmap(pil_img, cam, alpha=0.4):
     except cv2.error:
         return img
 
-def make_zip_download(original_pil, overlay_arr, filename_prefix):
-    mem_zip = BytesIO()
-    with zipfile.ZipFile(mem_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        buf1 = BytesIO()
-        original_pil.save(buf1, format="PNG")
-        zf.writestr(f"{filename_prefix}_original.png", buf1.getvalue())
-
-        buf2 = BytesIO()
-        Image.fromarray(overlay_arr).save(buf2, format="PNG")
-        zf.writestr(f"{filename_prefix}_gradcam.png", buf2.getvalue())
-    mem_zip.seek(0)
-    return mem_zip.getvalue()
-
 # ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
-st.markdown(CARD_CSS, unsafe_allow_html=True)
+st.markdown(BASE_CSS, unsafe_allow_html=True)
 
-st.sidebar.title("🧾 Receipt Forgery Detector")
-st.sidebar.markdown("Upload receipts, get predictions, and visualize Grad-CAM.")
-st.sidebar.markdown("---")
-st.sidebar.header("Model Info")
-st.sidebar.write(f"Model file: `{MODEL_PATH}`")
-st.sidebar.markdown("---")
+# Header grid
+st.markdown("<div class='header-grid'><div class='header-title'>🧾 Receipt Forgery Detector</div></div>", unsafe_allow_html=True)
+st.caption("Compact dashboard — prediction, confidence, and Grad-CAM in one view.")
+
 theme_dark = st.sidebar.checkbox("🌙 Dark Mode", value=False)
 
-st.title("📊 Receipt Forgery Detector — ResNet50")
-st.caption("AI-powered detection with confidence gauge + Grad-CAM attention")
+# Apply theme colors
+if theme_dark:
+    st.markdown("<style>body, .stApp {background-color:#1E1E1E; color:#EAEAEA;}</style>", unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader("Upload receipt image(s)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
@@ -224,6 +224,7 @@ show_bar = st.checkbox("Show Confidence Bar", value=True)
 
 for i, uploaded in enumerate(uploaded_files):
     pil_img = Image.open(uploaded).convert("RGB")
+    pil_img = pil_img.resize((IMG_SIZE, IMG_SIZE))
     input_tensor = pil_to_tensor(pil_img)
     label, confidence, raw_out = predict_single(model, input_tensor)
 
@@ -237,10 +238,10 @@ for i, uploaded in enumerate(uploaded_files):
         if show_bar:
             color = "#2ecc71" if "GENUINE" in label else "#e74c3c"
             st.markdown(f"""
-            <div style="width:100%; background:#eee; border-radius:8px; margin:6px 0;">
-              <div style="width:{confidence*100:.2f}%; background:{color}; padding:6px; 
-                          border-radius:8px; text-align:center; color:white; font-weight:600;">
-                {confidence*100:.2f}%
+            <div style="width:100%; background:#ddd; border-radius:6px; margin:4px 0;">
+              <div style="width:{confidence*100:.1f}%; background:{color}; padding:4px;
+                          border-radius:6px; text-align:center; color:white; font-weight:600;">
+                {confidence*100:.1f}%
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -249,7 +250,7 @@ for i, uploaded in enumerate(uploaded_files):
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=confidence*100,
-                title={'text': "Confidence (%)"},
+                title={'text': "Confidence (%)", 'font': {'size': 14}},
                 gauge={
                     'axis': {'range': [0, 100]},
                     'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"},
@@ -259,6 +260,7 @@ for i, uploaded in enumerate(uploaded_files):
                     ]
                 }
             ))
+            fig.update_layout(height=180)
             st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
 
         st.markdown("</div>", unsafe_allow_html=True)
@@ -270,11 +272,6 @@ for i, uploaded in enumerate(uploaded_files):
             cam = compute_gradcam(model, input_tensor)
             overlay = overlay_heatmap(pil_img, cam)
             st.image(overlay, caption="Model Attention", use_container_width=True)
-
-            zip_bytes = make_zip_download(pil_img, overlay, os.path.splitext(uploaded.name)[0])
-            st.download_button("⬇ Download Original + Heatmap (ZIP)", data=zip_bytes,
-                               file_name=f"images_{os.path.splitext(uploaded.name)[0]}.zip",
-                               mime="application/zip")
         else:
             st.info("Enable Grad-CAM to view model attention.")
         st.markdown("</div>", unsafe_allow_html=True)
