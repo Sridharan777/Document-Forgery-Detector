@@ -238,8 +238,8 @@ st.set_page_config(page_title="Document Forgery Detector", layout="wide")
 st.markdown(BASE_CARD_CSS, unsafe_allow_html=True)
 
 # Sidebar content
-st.sidebar.title("🧾 Receipt Forgery Detector")
-st.sidebar.write("ResNet50 + Grad-CAM explainability")
+st.sidebar.title("🧾 Document Forgery Detector")
+st.sidebar.write(" Grad-CAM explainability")
 st.sidebar.markdown("---")
 st.sidebar.header("Model")
 st.sidebar.write(f"Model path: `{MODEL_PATH}`")
@@ -254,8 +254,8 @@ st.sidebar.write("Tip: Try both genuine and forged receipts to test Grad-CAM.")
 st.sidebar.markdown("---")
 st.sidebar.write(f"Device: `{DEVICE}`")
 
-st.title("🧾 Receipt Forgery Detector — ResNet50 (Explainable)")
-st.caption("Upload a receipt and see prediction, confidence and Grad-CAM.")
+st.title("🧾 Document Forgery Detector ")
+st.caption("Upload a receipt or document to see prediction, confidence and Grad-CAM.")
 
 # Dark/light UI styles (card bg/text)
 if theme_dark:
