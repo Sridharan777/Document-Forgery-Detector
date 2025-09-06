@@ -1,4 +1,4 @@
-# app.py (final polished UI)
+# app.py — Final Polished Version with Dark/Light Mode + Matched Grad-CAM Size
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -7,48 +7,16 @@ import numpy as np
 import cv2
 from PIL import Image
 from io import BytesIO
-import os
-import traceback
-import gdown
+import os, traceback, gdown, time
 import plotly.graph_objects as go
-import time
 
 # ---------------- CONFIG ----------------
-IMG_SIZE = 224  # used only for prediction, not for display
+IMG_SIZE = 224  # only for model inference
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
-
-# Style
-st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
-st.markdown("""
-<style>
-body, .stApp { font-size: 14px; }
-.result-card {
-  border-radius: 10px;
-  padding: 12px;
-  margin: 6px 0;
-  background-color: white;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
-}
-.result-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-.header-grid {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 8px;
-}
-.header-title {
-  font-size: 26px;
-  font-weight: 700;
-  grid-column: 2;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # ---------------- HELPERS ----------------
 def download_model_if_missing(gdrive_id):
@@ -69,16 +37,13 @@ def download_model_if_missing(gdrive_id):
 def load_model():
     try:
         drive_id = None
-        try:
-            drive_id = st.secrets.get("MODEL_GDRIVE_ID", None)
-        except Exception:
-            pass
+        try: drive_id = st.secrets.get("MODEL_GDRIVE_ID", None)
+        except Exception: pass
         if not os.path.exists(MODEL_PATH):
             ok = download_model_if_missing(drive_id) if drive_id else False
-            if not ok:
-                ok = download_model_if_missing(FALLBACK_GDRIVE_ID)
-            if not ok:
-                st.error("❌ Model not found and no Google Drive ID worked.")
+            if not ok: ok = download_model_if_missing(FALLBACK_GDRIVE_ID)
+            if not ok: 
+                st.error("❌ Model not found.")
                 return None
 
         ckpt = torch.load(MODEL_PATH, map_location="cpu")
@@ -90,21 +55,18 @@ def load_model():
                     break
             if state_dict is ckpt and any(k.endswith(".weight") for k in ckpt.keys()):
                 state_dict = ckpt
-
         new_state = {k.replace("module.", ""): v for k, v in state_dict.items()}
+
         out_features = None
         for cand in ("fc.weight", "classifier.weight", "head.weight"):
             if cand in new_state:
-                out_features = new_state[cand].shape[0]
-                break
-        if out_features is None:
-            out_features = 2
+                out_features = new_state[cand].shape[0]; break
+        if out_features is None: out_features = 2
 
         model = models.resnet50(weights=None)
         model.fc = nn.Linear(model.fc.in_features, out_features)
         model.load_state_dict(new_state, strict=False)
-        model.to(DEVICE)
-        model.eval()
+        model.to(DEVICE); model.eval()
         return model
     except Exception as e:
         st.error(f"Failed to load model: {e}")
@@ -120,7 +82,6 @@ def pil_to_tensor(img_pil):
     return transform(img_pil).unsqueeze(0).to(DEVICE)
 
 def predict_single(model, input_tensor):
-    model.eval()
     with torch.no_grad():
         out = model(input_tensor)
         if out.shape[1] == 1:
@@ -136,64 +97,58 @@ def predict_single(model, input_tensor):
 
 def compute_gradcam(model, input_tensor, target_layer=None):
     activations, gradients = [], []
-    if target_layer is None:
-        target_layer = model.layer4[-1]
-
+    if target_layer is None: target_layer = model.layer4[-1]
     def forward_hook(m, i, o): activations.append(o.detach().cpu())
     def backward_hook(m, gi, go): gradients.append(go[0].detach().cpu())
-
     fh = target_layer.register_forward_hook(forward_hook)
-    try:
-        bh = target_layer.register_full_backward_hook(backward_hook)
-    except Exception:
-        bh = target_layer.register_backward_hook(backward_hook)
-
+    try: bh = target_layer.register_full_backward_hook(backward_hook)
+    except: bh = target_layer.register_backward_hook(backward_hook)
     model.zero_grad()
     out = model(input_tensor)
     score = out[:, 0].sum() if out.shape[1] == 1 else out[0, int(torch.argmax(out, 1))]
     score.backward()
-
     if not activations or not gradients:
-        fh.remove(); bh.remove()
-        return None
-
-    acts = activations[0].squeeze(0)
-    grads = gradients[0].squeeze(0)
+        fh.remove(); bh.remove(); return None
+    acts, grads = activations[0].squeeze(0), gradients[0].squeeze(0)
     weights = grads.mean(dim=(1, 2))
     cam = (weights[:, None, None] * acts).sum(dim=0).numpy()
     cam = np.maximum(cam, 0)
     cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
-    cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
     fh.remove(); bh.remove()
     return cam
 
 def overlay_heatmap(pil_img, cam, alpha=0.4):
-    img = np.array(pil_img.resize((IMG_SIZE, IMG_SIZE))).astype(np.uint8)
-    if cam is None:
-        return img
-    heatmap = np.uint8(cam * 255)
+    # resize CAM to match original image size
+    img = np.array(pil_img).astype(np.uint8)
+    if cam is None: return img
+    cam_resized = cv2.resize(cam, (img.shape[1], img.shape[0]))
+    heatmap = np.uint8(cam_resized * 255)
     heat = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     heat = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(img, 1 - alpha, heat, alpha, 0)
 
 # ---------------- UI ----------------
-st.markdown("<div class='header-grid'><div class='header-title'>🧾 Receipt Forgery Detector</div></div>", unsafe_allow_html=True)
-st.caption("Prediction • Confidence • Grad-CAM — all in one clean layout.")
+st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
+st.markdown("<h2 style='text-align:center;'>🧾 Receipt Forgery Detector</h2>", unsafe_allow_html=True)
+st.caption("Upload receipts → See prediction, confidence, Grad-CAM overlay")
+
+# 🔘 Dark/Light Theme Toggle
+dark_mode = st.sidebar.toggle("🌙 Dark Mode", value=False)
+
+# Theme colors
+BG_COLOR = "#1e1e1e" if dark_mode else "white"
+TEXT_COLOR = "white" if dark_mode else "black"
 
 uploaded_files = st.file_uploader("Upload receipt image(s)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
 if not uploaded_files:
-    st.info("Upload one or more receipt images to start.")
-    st.stop()
+    st.info("Upload receipt images to start."); st.stop()
 
 with st.spinner("Loading model..."):
     model = load_model()
-if model is None:
-    st.stop()
+if model is None: st.stop()
 
 show_heatmap = st.checkbox("Show Grad-CAM", value=True)
 show_gauge = st.checkbox("Show Confidence Gauge", value=True)
-show_bar = st.checkbox("Show Confidence Bar", value=True)
 
 for i, uploaded in enumerate(uploaded_files):
     pil_img = Image.open(uploaded).convert("RGB")
@@ -202,47 +157,35 @@ for i, uploaded in enumerate(uploaded_files):
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown(f"<div class='result-card'>", unsafe_allow_html=True)
-        st.markdown(f"<div class='result-title'>Prediction: {label}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:{BG_COLOR}; color:{TEXT_COLOR}; padding:10px; border-radius:10px;'>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:{TEXT_COLOR};'>Prediction: {label}</h4>", unsafe_allow_html=True)
         st.image(pil_img, caption="Uploaded Receipt", use_container_width=True)
-
-        if show_bar:
-            color = "#2ecc71" if "GENUINE" in label else "#e74c3c"
-            st.markdown(f"""
-            <div style="width:100%; background:#ddd; border-radius:6px; margin:4px 0;">
-              <div style="width:{confidence*100:.1f}%; background:{color}; padding:4px;
-                          border-radius:6px; text-align:center; color:white; font-weight:600;">
-                {confidence*100:.1f}%
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
 
         if show_gauge:
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=confidence*100,
-                title={'text': "Confidence (%)", 'font': {'size': 16}},
+                title={'text': "Confidence (%)", 'font': {'size': 16, 'color': TEXT_COLOR}},
                 gauge={
                     'axis': {'range': [0, 100]},
                     'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"},
                     'steps': [
                         {'range': [0, 50], 'color': "lightcoral"},
-                        {'range': [50, 100], 'color': "lightgreen"}
+                        {'range': [50, 100], 'color': "lightgreen"},
                     ]
                 }
             ))
-            fig.update_layout(height=250, margin=dict(t=0, b=0))
+            fig.update_layout(height=230, margin=dict(t=0, b=0))
             st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
-
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
-        st.markdown(f"<div class='result-card'>", unsafe_allow_html=True)
-        st.markdown(f"<div class='result-title'>Grad-CAM Heatmap</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:{BG_COLOR}; color:{TEXT_COLOR}; padding:10px; border-radius:10px;'>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:{TEXT_COLOR};'>Grad-CAM</h4>", unsafe_allow_html=True)
         if show_heatmap:
             cam = compute_gradcam(model, input_tensor)
             overlay = overlay_heatmap(pil_img, cam)
             st.image(overlay, caption="Model Attention", use_container_width=True)
         else:
-            st.info("Enable Grad-CAM to view model attention.")
+            st.info("Enable Grad-CAM to view attention.")
         st.markdown("</div>", unsafe_allow_html=True)
