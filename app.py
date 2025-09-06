@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 # ---------------- CONFIG ----------------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"  # switched to ResNet50
-FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"  # optional but recommended
+FALLBACK_GDRIVE_ID = "1zMrv6S6rOWyiTQ0Fgw0VG0o0fEnrWzE-"  # optional, replace if needed
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD  = (0.229, 0.224, 0.225)
@@ -54,7 +54,6 @@ def load_model():
         state_dict = ckpt.get("state_dict", ckpt)
         new_state = {k.replace("module.", ""): v for k, v in state_dict.items()}
 
-        # Detect number of outputs
         out_features = 1
         if "fc.weight" in new_state:
             out_features = new_state["fc.weight"].shape[0]
@@ -144,8 +143,8 @@ st.title("🧾 Receipt Forgery Detector (ResNet50 + Grad-CAM)")
 
 st.sidebar.header("🔧 Model / System Info")
 st.sidebar.write(f"**Device:** `{DEVICE}`")
-st.sidebar.write("Model will auto-detect number of outputs (1 or 2).")
-st.sidebar.info("💡 Tip: Use a well-trained model for better confidence scores!")
+st.sidebar.write("Model auto-detects outputs (1-logit or 2-class).")
+st.sidebar.info("💡 Tip: Use a well-trained model for better confidence scores.")
 
 uploaded_files = st.file_uploader("📂 Upload receipt image(s)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
@@ -156,7 +155,7 @@ else:
     if model is None:
         st.stop()
 
-    st.sidebar.success(f"Model loaded with **{out_features} output(s)**.")
+    st.sidebar.success(f"✅ Model loaded with **{out_features} output(s)**.")
 
     show_heatmap = st.sidebar.checkbox("Show Grad-CAM Heatmap", value=True)
     show_gauge = st.sidebar.checkbox("Show Confidence Gauge", value=True)
@@ -176,13 +175,36 @@ else:
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** {confidence*100:.2f}%")
 
-        # Confidence Bar
+        # Confidence Bar (✅ properly closed triple-quoted string)
         color = "#2ecc71" if "GENUINE" in label else "#e74c3c"
         bar_html = f"""
         <div style="width:100%; background:#eee; border-radius:8px; margin:6px 0;">
-          <div style="width:{confidence*100:.2f}%; background:{color}; padding:6px 4px;
-                      border-radius:8px; text-align:center; color:white; font-weight:600;">
-            {confidence*100:.2f}%
-          </div>
+            <div style="width:{confidence*100:.2f}%; background:{color}; 
+                        padding:6px 4px; border-radius:8px; 
+                        text-align:center; color:white; font-weight:600;">
+                {confidence*100:.2f}%
+            </div>
         </div>
-       
+        """
+        st.markdown(bar_html, unsafe_allow_html=True)
+
+        if show_gauge:
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=confidence*100,
+                title={'text': "Confidence (%)"},
+                gauge={'axis': {'range': [0, 100]},
+                       'bar': {'color': color},
+                       'steps': [{'range': [0, 50], 'color': "lightcoral"},
+                                 {'range': [50, 100], 'color': "lightgreen"}]}))
+            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{uploaded.name}")
+
+        if show_heatmap:
+            with st.spinner("Generating Grad-CAM..."):
+                cam = compute_gradcam(model, input_tensor)
+                overlay = overlay_heatmap_on_pil(pil_img, cam)
+                st.image(overlay, caption="🔥 Model Attention (Grad-CAM)", use_container_width=True)
+                buf = BytesIO()
+                Image.fromarray(overlay).save(buf, format="PNG")
+                st.download_button("Download Heatmap", data=buf.getvalue(),
+                                   file_name=f"heatmap_{uploaded.name}.png", mime="image/png")
