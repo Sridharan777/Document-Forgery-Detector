@@ -26,7 +26,6 @@ def download_model_if_missing(gdrive_id: str):
     try:
         st.info("📥 Downloading model from Google Drive...")
         gdown.download(url, MODEL_PATH, quiet=False)
-        time.sleep(1.0)
         return os.path.exists(MODEL_PATH)
     except Exception as e:
         st.error(f"Model download failed: {e}")
@@ -64,7 +63,6 @@ def load_model():
         model.load_state_dict(new_state, strict=False)
         model.to(DEVICE).eval()
         return model
-
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         st.text(traceback.format_exc())
@@ -123,6 +121,16 @@ def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
 # ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
 
+# --- Theme toggle ---
+theme = st.sidebar.radio("Theme", ["Light", "Dark"], index=0)
+if theme == "Dark":
+    st.markdown(
+        "<style>body, .stApp {background-color:#0e1117; color:white;} .stMarkdown, .stDataFrame {color:white;}</style>",
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown("<style>body, .stApp {background-color:white; color:black;}</style>", unsafe_allow_html=True)
+
 # --- Navbar ---
 st.markdown("""
     <style>
@@ -153,45 +161,45 @@ if not uploaded_files: st.stop()
 model = load_model()
 if model is None: st.stop()
 
-overlay_buffers = []  # store all Grad-CAM overlays for later download
+overlay_buffers = []
 
 for i, uploaded in enumerate(uploaded_files):
-    with st.container():
-        st.markdown("""
-        <div style='background: var(--background-color); padding: 1.2rem;
-        border-radius: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 1rem;'>
-        """, unsafe_allow_html=True)
+    pil_img = Image.open(uploaded).convert("RGB")
+    resized_img = resize_for_display(pil_img)
+    input_tensor = pil_to_tensor(pil_img)
+    label, confidence, raw_out = predict_single(model, input_tensor)
 
-        pil_img = Image.open(uploaded).convert("RGB")
-        resized_img = resize_for_display(pil_img)
-        input_tensor = pil_to_tensor(pil_img)
-        label, confidence, raw_out = predict_single(model, input_tensor)
+    # --- Clean Card Layout ---
+    st.markdown(
+        "<div style='background:rgba(0,0,0,0.04); padding:1.2rem; border-radius:1rem; margin-bottom:1rem;'>",
+        unsafe_allow_html=True,
+    )
 
-        col1, col2, col3 = st.columns([1.3, 1.3, 0.8], gap="small")
-        with col1:
-            st.image(resized_img, caption=f"📄 Receipt ({label})", use_container_width=False)
+    col1, col2, col3 = st.columns([1.3, 1.3, 0.8], gap="small")
+    with col1:
+        st.image(resized_img, caption=f"📄 Receipt ({label})", use_container_width=False)
 
-        with col2:
-            with st.spinner("🔍 Generating Grad-CAM..."):
-                cam = compute_gradcam(model, input_tensor)
-                overlay = overlay_heatmap_on_pil(pil_img, cam)
-                overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
-                st.image(overlay_resized, caption="🔥 Grad-CAM Overlay", use_container_width=False)
+    with col2:
+        with st.spinner("🔍 Generating Grad-CAM..."):
+            cam = compute_gradcam(model, input_tensor)
+            overlay = overlay_heatmap_on_pil(pil_img, cam)
+            overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
+            st.image(overlay_resized, caption="🔥 Grad-CAM Overlay", use_container_width=False)
 
-                buf = BytesIO()
-                overlay_resized.save(buf, format="PNG")
-                overlay_buffers.append((f"gradcam_{i}.png", buf.getvalue()))
+            buf = BytesIO()
+            overlay_resized.save(buf, format="PNG")
+            overlay_buffers.append((f"gradcam_{i}.png", buf.getvalue()))
 
-        with col3:
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number", value=confidence*100,
-                title={'text': "Confidence"},
-                gauge={'axis': {'range': [0, 100]},
-                       'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"}}
-            ))
-            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
+    with col3:
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number", value=confidence*100,
+            title={'text': "Confidence"},
+            gauge={'axis': {'range': [0, 100]},
+                   'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"}}
+        ))
+        st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Download all results as ZIP ---
 if overlay_buffers:
