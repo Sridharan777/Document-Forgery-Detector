@@ -25,16 +25,18 @@ IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
 # ---------- User credentials setup ----------
-# Passwords hashed with bcrypt.hashpw(byte_password, bcrypt.gensalt()).decode()
-# Example passwords: alice -> "alicepass", bob -> "bobpass"
 users = {
-    "alice": {
-        "name": "Alice",
-        "password": "$2b$12$ZiicYZGLRhPDa0/HQsSC5uTqNnaNtSBGTFDEa7BcP6JCsG36izQkG",
-    },
-    "bob": {
-        "name": "Bob",
-        "password": "$2b$12$1Wgzm99QJMKm7NiO3TgDN.XoXcicUUuuCQxoRwoqc24k6LxjMn7aK",
+    "usernames": {
+        "alice": {
+            "name": "Alice",
+            # bcrypt hash for password 'alicepass'
+            "password": "$2b$12$ZiicYZGLRhPDa0/HQsSC5uTqNnaNtSBGTFDEa7BcP6JCsG36izQkG",
+        },
+        "bob": {
+            "name": "Bob",
+            # bcrypt hash for password 'bobpass'
+            "password": "$2b$12$1Wgzm99QJMKm7NiO3TgDN.XoXcicUUuuCQxoRwoqc24k6LxjMn7aK",
+        },
     }
 }
 
@@ -204,20 +206,18 @@ if authentication_status:
             </span>
         """
 
-    # Add your existing helper functions for model loading, prediction, gradcam, etc. here unmodified except using per-user storage for uploads & feedback.
-
-    # Your existing UI layout & code goes here, replacing upload_history and feedback access with:
-    #   st.session_state.upload_history[username]
-    #   st.session_state.feedback[username]
-
-    # Example upload and history usage:
+    # Paste your existing helper functions here, e.g., load_model, predict_single, compute_gradcam, etc.
+    # Modify upload history and feedback code to use per-user dicts, e.g.:
+    # st.session_state.upload_history[username]
+    # st.session_state.feedback[username]
 
     st.markdown(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
     uploaded_files = st.file_uploader("", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
     if uploaded_files:
         for f in uploaded_files:
-            add_to_history(f.name)
+            if f.name not in st.session_state.upload_history[username]:
+                st.session_state.upload_history[username].append(f.name)
 
     with st.sidebar:
         st.header("Upload History 🕒")
@@ -227,9 +227,8 @@ if authentication_status:
         else:
             st.write("No history yet.")
 
-    # Load model, display images, predict, generate PDF as before but for feedback use handle_feedback_local and display_feedback_local.
-
-    # ... Rest of your app logic unchanged except for the above session state modification.
+    # Model load, prediction display, grad-cam, PDF generation, feedback buttons, etc.
+    # Use handle_feedback_local() and display_feedback_local() adapted above for feedback
 
 else:
     if authentication_status is False:
