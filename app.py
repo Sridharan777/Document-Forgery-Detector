@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 import numpy as np
-import cv2
 from PIL import Image
 from io import BytesIO
 import os
@@ -14,6 +13,7 @@ import gdown
 import plotly.graph_objects as go
 from fpdf import FPDF
 import tempfile
+import matplotlib.cm as cm
 
 # ---------------- Config ----------------
 IMG_SIZE = 224
@@ -54,7 +54,6 @@ if authentication_status:
         authenticator.logout("main")
         st.experimental_rerun()
 
-    # Initialize user-specific session state
     if "upload_history" not in st.session_state:
         st.session_state.upload_history = {}
     if "feedback" not in st.session_state:
@@ -284,15 +283,22 @@ if authentication_status:
         grads, acts = gradients[0].squeeze(0), activations[0].squeeze(0)
         weights = grads.mean(dim=(1, 2))
         cam = np.maximum((weights[:, None, None] * acts).sum(dim=0).numpy(), 0)
-        cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
-        return (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        # Use PIL resize instead of cv2.resize
+        cam_img = Image.fromarray((255 * ((cam - cam.min()) / (cam.max() - cam.min() + 1e-8))).astype(np.uint8))
+        cam_img = cam_img.resize((IMG_SIZE, IMG_SIZE))
+        # Convert to numpy array normalized 0-1
+        cam_norm = np.array(cam_img) / 255.0
+        return cam_norm
 
     def overlay_heatmap_on_pil(pil_img, cam, alpha=0.4):
-        img_resized = np.array(pil_img.resize((IMG_SIZE, IMG_SIZE))).astype(np.uint8)
-        heatmap = np.uint8(255 * cam)
-        heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
-        return cv2.addWeighted(img_resized, 1 - alpha, heatmap_color, alpha, 0)
+        pil_img = pil_img.resize((IMG_SIZE, IMG_SIZE)).convert("RGBA")
+        heatmap_uint8 = (cam * 255).astype(np.uint8)
+        colormap = cm.get_cmap("jet")
+        heatmap_rgba = colormap(heatmap_uint8 / 255.0, bytes=True)  # RGBA
+        heatmap_img = Image.fromarray(heatmap_rgba, mode="RGBA")
+        heatmap_img.putalpha(int(255 * alpha))
+        composed = Image.alpha_composite(pil_img, heatmap_img)
+        return composed.convert("RGB")
 
     def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
         w, h = pil_img.size
@@ -306,19 +312,15 @@ if authentication_status:
         pdf.cell(0, 10, "Receipt Forgery Detection Report", 0, 1, 'C')
         pdf.ln(5)
         pdf.set_font("Arial", '', 12)
-
-        safe_prediction = prediction  # No emojis to avoid encoding errors
+        safe_prediction = prediction
         pdf.cell(0, 10, f"Prediction: {safe_prediction}", 0, 1)
         pdf.cell(0, 10, f"Confidence: {confidence:.2%}", 0, 1)
         pdf.ln(10)
-
         with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as orig_tmp, tempfile.NamedTemporaryFile(suffix=".png", delete=True) as gradcam_tmp:
             original_img.save(orig_tmp.name)
             gradcam_img.save(gradcam_tmp.name)
-
             pdf.image(orig_tmp.name, x=10, y=50, w=80)
             pdf.image(gradcam_tmp.name, x=110, y=50, w=80)
-
             return pdf.output(dest='S').encode('latin1')
 
     st.markdown("""
@@ -327,12 +329,9 @@ if authentication_status:
             <a style='color:#4ea1d3;text-decoration:none;font-size:1.1em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
         </div>
     """, unsafe_allow_html=True)
-    st.markdown(
-        f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>",
-        unsafe_allow_html=True
-    )
-
+    st.markdown(f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
     st.markdown(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
+
     uploaded_files = st.file_uploader("", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
     if uploaded_files:
@@ -361,32 +360,24 @@ if authentication_status:
                 pil_img = Image.open(uploaded).convert("RGB")
                 resized_img = resize_for_display(pil_img)
                 input_tensor = pil_to_tensor(pil_img)
-
                 with st.spinner(f"Processing {uploaded.name}..."):
                     label, confidence, raw_out = predict_single(model, input_tensor)
                     cam = compute_gradcam(model, input_tensor)
                     overlay = overlay_heatmap_on_pil(pil_img, cam)
-                    overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
-
+                    overlay_resized = overlay.resize(resized_img.size)
                 buf = BytesIO()
                 overlay_resized.save(buf, format="PNG")
                 overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
-
                 st.markdown("<div class='result-card'>", unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1.1, 1.05, 0.95], gap="medium")
-
                 with col1:
                     st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
                 with col2:
                     st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
                 with col3:
                     st.markdown(f"<div style='font-size:1.25em'><b>{tooltip('Prediction:', 'Whether the receipt is Genuine or Forged')}</b></div>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-weight:bold;font-size:2em;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>",
-                        unsafe_allow_html=True)
-                    st.markdown(
-                        f"<span style='font-size:1.1em;color:#8fb9d2;'>{tooltip('Confidence:', 'Confidence score of the prediction')}</span> <b>{confidence:.2%}</b>",
-                        unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-weight:bold;font-size:2em;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='font-size:1.1em;color:#8fb9d2;'>{tooltip('Confidence:', 'Confidence score of the prediction')}</span> <b>{confidence:.2%}</b>", unsafe_allow_html=True)
                     fig = go.Figure(go.Indicator(
                         mode="gauge+number+delta",
                         value=confidence*100,
@@ -397,10 +388,8 @@ if authentication_status:
                         number={'suffix': '%'},
                     ))
                     st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
-
                     pdf_bytes = generate_pdf_report(pil_img, overlay_resized, label, confidence)
                     st.download_button("📄 Download PDF Report", pdf_bytes, file_name=f"report_{i+1}.pdf", mime="application/pdf")
-
                     col_up, col_down = st.columns([1, 1])
                     with col_up:
                         if st.button("👍 Useful", key=f"up_{uploaded.name}"):
@@ -408,15 +397,11 @@ if authentication_status:
                     with col_down:
                         if st.button("👎 Not Useful", key=f"down_{uploaded.name}"):
                             handle_feedback_local(uploaded.name, False)
-
                     display_feedback_local(uploaded.name)
-
                 st.markdown("</div>", unsafe_allow_html=True)
                 st.caption("Switch tabs to view more receipts or download Grad-CAM images.")
-
                 progress_bar.progress((i + 1) / len(uploaded_files))
         progress_bar.empty()
-
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zipf:
             for fname, data in overlay_buffers:
