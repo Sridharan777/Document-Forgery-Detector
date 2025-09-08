@@ -15,6 +15,7 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
+# ---------------- Config ----------------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
@@ -22,7 +23,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
-# User credentials with bcrypt hashed passwords
+# User credentials (bcrypt hashes for passwords: alicepass, bobpass)
 users = {
     "usernames": {
         "alice": {
@@ -43,7 +44,8 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1,
 )
 
-name, authentication_status, username = authenticator.login("Login", location="main")
+# Correct login call using positional location parameter
+name, authentication_status, username = authenticator.login("Login", "main")
 
 if authentication_status:
     st.sidebar.write(f"Welcome {name}")
