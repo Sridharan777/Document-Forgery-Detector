@@ -6,10 +6,13 @@ import numpy as np
 import cv2
 from PIL import Image
 from io import BytesIO
-import os, traceback, zipfile, gdown
+import os
+import traceback
+import zipfile
+import gdown
 import plotly.graph_objects as go
 
-# -------- CONFIG (same as before) --------
+# ---------------- Config ----------------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
@@ -17,81 +20,157 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
-# ----------- UI THEME ENHANCEMENTS -----------
+# ---------- Page config and Google Fonts ----------
 st.set_page_config(
     page_title="Receipt Forensics",
     page_icon="🧾",
-    layout="wide"
+    layout="wide",
 )
 
-# -------- THEME TOGGLE IN SIDEBAR -----------
+# Import Google Fonts
+st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+""", unsafe_allow_html=True)
+
+# ---------- Sidebar: Theme toggle and history ----------
 theme = st.sidebar.radio("Select Theme", ["Light", "Dark"], index=1, help="Switch between Light and Dark mode.")
 
-# Apply CSS styles dynamically based on theme
-if theme == "Dark":
-    st.markdown("""
-        <style>
-            body, .stApp {
-                background-color: #131416;
-                color: #f5f6fa;
-            }
-            .result-card {
-                background: #21252b;
-                box-shadow: 0 4px 32px #003e9622;
-                border-radius: 1.1em;
-                padding: 1.25em 1.4em 1em 1.4em;
-                margin-bottom: 1.1em;
-            }
-            .stButton>button {
-                color: #fff;
-                background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
-                border: none;
-                border-radius: .35em;
-                font-weight: 600;
-            }
-            a {
-                color: #60c1e3;
-            }
-            .stFileUploader {
-                background-color: #21252b;
-                border-radius: 0.5em;
-                padding: 1em;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-        <style>
-            body, .stApp {
-                background-color: #f9f9f9;
-                color: #141414;
-            }
-            .result-card {
-                background: #ffffff;
-                box-shadow: 0 4px 32px #aaa;
-                border-radius: 1.1em;
-                padding: 1.25em 1.4em 1em 1.4em;
-                margin-bottom: 1.1em;
-            }
-            .stButton>button {
-                color: #fff;
-                background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
-                border: none;
-                border-radius: .35em;
-                font-weight: 600;
-            }
-            a {
-                color: #007bff;
-            }
-            .stFileUploader {
-                background-color: #ffffff;
-                border-radius: 0.5em;
-                padding: 1em;
-            }
-        </style>
-        """, unsafe_allow_html=True)
+# Initialize session state collections if not present
+if "upload_history" not in st.session_state:
+    st.session_state.upload_history = []
 
-# ------------ HELPERS (same as before) ------------
+if "feedback" not in st.session_state:
+    st.session_state.feedback = {}
+
+# ---------- Dynamic Theming CSS ----------
+def apply_theme_css(theme_base):
+    dark_styles = """
+        body, .stApp {
+            background-color: #131416;
+            color: #f5f6fa;
+            font-family: 'Montserrat', sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .result-card {
+            background: #21252b;
+            box-shadow: 0 4px 32px #003e9622;
+            border-radius: 1.1em;
+            padding: 1.25em 1.4em 1em 1.4em;
+            margin-bottom: 1.1em;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+            border: none;
+            border-radius: .35em;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%);
+        }
+        a {
+            color: #60c1e3;
+            transition: color 0.4s ease;
+        }
+        .stFileUploader {
+            background-color: #21252b;
+            border-radius: 0.5em;
+            padding: 1em;
+            transition: background-color 0.4s ease;
+        }
+        /* Scrollbar for dark mode */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #181a1f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #3d3f47;
+            border-radius: 10px;
+            border: 2px solid #181a1f;
+        }
+        /* Tooltip styling */
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.4s;
+        }
+    """
+    light_styles = """
+        body, .stApp {
+            background-color: #f9f9f9;
+            color: #141414;
+            font-family: 'Montserrat', sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .result-card {
+            background: #ffffff;
+            box-shadow: 0 4px 32px #aaa;
+            border-radius: 1.1em;
+            padding: 1.25em 1.4em 1em 1.4em;
+            margin-bottom: 1.1em;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+            border: none;
+            border-radius: .35em;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%);
+        }
+        a {
+            color: #007bff;
+            transition: color 0.4s ease;
+        }
+        .stFileUploader {
+            background-color: #ffffff;
+            border-radius: 0.5em;
+            padding: 1em;
+            transition: background-color 0.4s ease;
+        }
+        /* Scrollbar for light mode */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f9f9f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #a2a2a2;
+            border-radius: 10px;
+            border: 2px solid #f9f9f9;
+        }
+        /* Tooltip styling */
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.4s;
+        }
+    """
+    st.markdown(f"<style>{dark_styles if theme_base == 'Dark' else light_styles}</style>", unsafe_allow_html=True)
+
+apply_theme_css(theme)
+
+# ---------- Tooltip helper ----------
+def tooltip(label, text):
+    return f"""<span class="tooltip" style="border-bottom:1px dotted; cursor:help;">{label}
+        <span class="tooltiptext" style="visibility:hidden; opacity:0;
+        width: 210px; background-color: #555; color: #fff; text-align: center;
+        border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1;
+        bottom: 125%; left: 50%; margin-left: -105px; font-size: 0.85em;
+        transition: opacity 0.3s;">
+        {text}</span>
+        </span>
+    """
+
+# ------------ Helpers from your original app ------------
 def download_model_if_missing(gdrive_id: str):
     if os.path.exists(MODEL_PATH): return True
     if not gdrive_id: return False
@@ -188,90 +267,129 @@ def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
     scale = min(max_width / w, max_height / h)
     return pil_img.resize((int(w * scale), int(h * scale)))
 
-# -------- HEADER & NAVBAR --------
+# ---------- Helpers for User Feedback ----------
+def handle_feedback(file_key, upvote):
+    if file_key not in st.session_state.feedback:
+        st.session_state.feedback[file_key] = {"up": 0, "down": 0}
+    if upvote:
+        st.session_state.feedback[file_key]["up"] += 1
+    else:
+        st.session_state.feedback[file_key]["down"] += 1
+
+def display_feedback(file_key):
+    up = st.session_state.feedback.get(file_key, {}).get("up", 0)
+    down = st.session_state.feedback.get(file_key, {}).get("down", 0)
+    st.markdown(f"👍 {up} &nbsp;&nbsp;&nbsp; 👎 {down}")
+
+# ---------- Header & Branding ----------
 with st.container():
     st.markdown("""
-    <div style='display:flex;align-items:center;justify-content:space-between;padding:0.9em 1.2em 0.7em 0em;background:rgba(8,16,32,0.17);border-radius:16px;margin-bottom:1.3em;'>
-        <div style='font-weight:bold;font-size:1.5em; letter-spacing:0.5px; color:#70c1b3;'>🧾 Receipt Forgery Detector</div>
+    <div style='display:flex;align-items:center;justify-content:space-between;padding:0.9em 1.2em 0.7em 0em;background:rgba(8,16,32,0.17);border-radius:16px;margin-bottom:1.3em;font-family: Montserrat, sans-serif;'>
+        <div style='font-weight:bold;font-size:1.5em;letter-spacing:0.5px;color:#70c1b3;'>🧾 Receipt Forgery Detector</div>
         <a style='color:#4ea1d3;text-decoration:none;font-size:1.1em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
     """, unsafe_allow_html=True)
     st.markdown(
-        "<p style='color:#0a0a0a;font-size:1.13em;margin-bottom:1.7em;'>Upload one or more receipts to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", 
+        f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>",
         unsafe_allow_html=True
     )
 
-# ----------- MAIN APP INTERACTION ---------------
-uploaded_files = st.file_uploader(
-    "Upload receipt image(s)", 
-    type=["png", "jpg", "jpeg"], 
-    accept_multiple_files=True, 
-    help="You can upload multiple receipts at once."
-)
+# ---------- File uploader with tooltip ----------
+uploaded_files = st.file_uploader(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-if not uploaded_files:
-    st.info("No images uploaded. Please add one or more receipt images to begin.")
-    st.stop()
+if uploaded_files:
+    # Store uploaded file names in session state history (avoid duplicates)
+    for f in uploaded_files:
+        if f.name not in st.session_state.upload_history:
+            st.session_state.upload_history.append(f.name)
+else:
+    st.info("No receipt images uploaded yet.")
 
-model = load_model()
+# ---------- Sidebar: Upload history with thumbnails ----------
+with st.sidebar:
+    st.header("Upload History 🕒")
+    if st.session_state.upload_history:
+        for fname in st.session_state.upload_history:
+            st.markdown(f"• {fname}")
+    else:
+        st.write("No history yet.")
+
+# ---------- Model loading with animated spinner ----------
+with st.spinner("🧠 Loading detection model, please wait..."):
+    model = load_model()
 if model is None:
     st.stop()
 
-overlay_buffers = []
-tabs = st.tabs([f"Receipt {i+1}" for i in range(len(uploaded_files))])
+# ---------- Display results in tabs with responsive layout ----------
+if uploaded_files:
+    overlay_buffers = []
+    tabs = st.tabs([f"Receipt {i+1}" for i in range(len(uploaded_files))])
 
-for i, (uploaded, tab) in enumerate(zip(uploaded_files, tabs)):
-    with tab:
-        pil_img = Image.open(uploaded).convert("RGB")
-        resized_img = resize_for_display(pil_img)
-        input_tensor = pil_to_tensor(pil_img)
-        label, confidence, raw_out = predict_single(model, input_tensor)
-        cam = compute_gradcam(model, input_tensor)
-        overlay = overlay_heatmap_on_pil(pil_img, cam)
-        overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
-        buf = BytesIO()
-        overlay_resized.save(buf, format="PNG")
-        overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
+    for i, (uploaded, tab) in enumerate(zip(uploaded_files, tabs)):
+        with tab:
+            pil_img = Image.open(uploaded).convert("RGB")
+            resized_img = resize_for_display(pil_img)
+            input_tensor = pil_to_tensor(pil_img)
+            with st.spinner(f"Generating prediction & Grad-CAM for {uploaded.name}..."):
+                label, confidence, raw_out = predict_single(model, input_tensor)
+                cam = compute_gradcam(model, input_tensor)
+                overlay = overlay_heatmap_on_pil(pil_img, cam)
+                overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
 
-        # The result card
-        st.markdown("<div class='result-card'>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([1.1, 1.05, 0.95], gap="medium")
-        with c1:
-            st.image(resized_img, caption=f"📄 Original Receipt", use_container_width=True)
-        with c2:
-            st.image(overlay_resized, caption="🔥 Grad-CAM", use_container_width=True)
-        with c3:
-            st.markdown("<div style='font-size:1.25em'><b>Prediction:</b></div>", unsafe_allow_html=True)
-            st.markdown(
-                f"<div style='font-size:2em;font-weight:bold;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>", 
-                unsafe_allow_html=True)
-            st.markdown(
-                f"<span style='font-size:1.1em;color:#8fb9d2;'>Confidence:</span> <b>{confidence:.2%}</b>", 
-                unsafe_allow_html=True
-            )
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number", value=confidence*100,
-                title={'text': "Confidence"},
-                gauge={'axis': {'range': [0, 100]},
-                       'bar': {'color': "#30e394" if "GENUINE" in label else "#ff5264"}}
-            ))
-            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
-            st.download_button("💾 Download Grad-CAM", buf.getvalue(), file_name=f"gradcam_{i+1}.png", mime="image/png")
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.caption("Go to next tab for more results or download overlays.")
+            buf = BytesIO()
+            overlay_resized.save(buf, format="PNG")
+            overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
 
-# ------- ZIP Download for All Overlays ---------
-if overlay_buffers:
+            st.markdown("<div class='result-card'>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1.1, 1.05, 0.95], gap="medium")
+
+            with col1:
+                st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
+            with col2:
+                st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+            with col3:
+                st.markdown(f"<div style='font-size:1.25em'><b>{tooltip('Prediction:', 'Whether the receipt is Genuine or Forged')}</b></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='font-weight:bold;font-size:2em;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<span style='font-size:1.1em;color:#8fb9d2;'>{tooltip('Confidence:', 'The model’s confidence score for the prediction')}</span> <b>{confidence:.2%}</b>",
+                    unsafe_allow_html=True)
+                fig = go.Figure(go.Indicator(
+                    mode="gauge+number+delta",
+                    value=confidence*100,
+                    title={'text': "Confidence"},
+                    delta={'reference': st.session_state.feedback.get(uploaded.name, {}).get("up", 0)},
+                    gauge={'axis': {'range': [0, 100]},
+                           'bar': {'color': "#30e394" if "GENUINE" in label else "#ff5264"}},
+                    number={'suffix': '%'},
+                ))
+                st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
+
+                # Feedback buttons
+                col_up, col_down = st.columns([1, 1])
+                with col_up:
+                    if st.button("👍 Useful", key=f"up_{uploaded.name}"):
+                        handle_feedback(uploaded.name, True)
+                with col_down:
+                    if st.button("👎 Not Useful", key=f"down_{uploaded.name}"):
+                        handle_feedback(uploaded.name, False)
+
+                display_feedback(uploaded.name)
+
+                st.download_button("💾 Download Grad-CAM Overlay", buf.getvalue(), file_name=f"gradcam_{i+1}.png", mime="image/png")
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.caption("Switch tabs to view more receipts or download Grad-CAM images.")
+
+    # ZIP download
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zipf:
         for fname, data in overlay_buffers:
             zipf.writestr(fname, data)
-    st.download_button("📦 Download ALL Overlays (ZIP)", zip_buffer.getvalue(),
-                       file_name="all_gradcams.zip", mime="application/zip")
+    st.download_button("📦 Download ALL Overlays (ZIP)", zip_buffer.getvalue(), file_name="all_gradcams.zip", mime="application/zip")
 
-# --------- BEAUTIFUL FOOTER ----------
+# ---------- Footer ----------
 st.markdown("""
-<div style='text-align:center; padding-top:2em; font-size:1em; color:#8fb9d2;'>
-    Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
-</div>
+    <div style='text-align:center; padding-top:2em; font-size:1em; color:#8fb9d2; font-family: Montserrat, sans-serif;'>
+        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
+    </div>
 """, unsafe_allow_html=True)
