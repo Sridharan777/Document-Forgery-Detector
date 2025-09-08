@@ -1,9 +1,9 @@
-streamlit==1.49.1
-torch==2.8.0
-torchvision==0.23.0
-opencv-python-headless==4.12.0.88
-numpy
-pillow
+streamlit>=1.32
+torch>=2.0
+torchvision>=0.15
 gdown
+pillow
+numpy
+opencv-python-headless
 plotly
 matplotlib
