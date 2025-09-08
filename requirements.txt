@@ -1,5 +1,5 @@
 streamlit
-streamlit-authenticator==0.2.4
+streamlit-authenticator
 fpdf
 bcrypt
 torch
