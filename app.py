@@ -6,10 +6,10 @@ import numpy as np
 import cv2
 from PIL import Image
 from io import BytesIO
-import os, traceback, time, zipfile, gdown
+import os, traceback, zipfile, gdown
 import plotly.graph_objects as go
 
-# ---------------- CONFIG ----------------
+# -------- CONFIG (same as before) --------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
@@ -17,7 +17,34 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
-# ---------------- HELPERS ----------------
+# ----------- UI THEME ENHANCEMENTS -----------
+st.set_page_config(
+    page_title="Receipt Forensics",
+    page_icon="🧾",
+    layout="wide"
+)
+
+# Custom styles for shadowed cards, buttons, confidence colors
+st.markdown("""
+    <style>
+        .result-card {
+            background: #21252b;
+            border-radius: 1.1em;
+            box-shadow: 0 4px 32px #003e9622;
+            padding: 1.25em 1.4em 1em 1.4em;
+            margin-bottom: 1.1em;
+        }
+        .stButton>button {
+            color: #fff;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+            border: none;
+            border-radius: .35em;
+            font-weight: 600;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ------------ HELPERS (same as before) ------------
 def download_model_if_missing(gdrive_id: str):
     if os.path.exists(MODEL_PATH): return True
     if not gdrive_id: return False
@@ -39,12 +66,10 @@ def load_model():
             drive_id = st.secrets.get("MODEL_GDRIVE_ID", None)
         except:
             pass
-
         if not os.path.exists(MODEL_PATH):
             if not download_model_if_missing(drive_id) and not download_model_if_missing(FALLBACK_GDRIVE_ID):
                 st.error("Model not found locally and no valid Drive ID available.")
                 return None
-
         ckpt = torch.load(MODEL_PATH, map_location="cpu")
         state_dict = ckpt
         if isinstance(ckpt, dict):
@@ -54,10 +79,8 @@ def load_model():
                     break
             if state_dict is ckpt and any(k.endswith(".weight") for k in ckpt.keys()):
                 state_dict = ckpt
-
         new_state = {k.replace("module.", ""): v for k, v in state_dict.items()}
         out_features = new_state.get("fc.weight", torch.empty((2,))).shape[0] if "fc.weight" in new_state else 2
-
         model = models.resnet50(weights=None)
         model.fc = nn.Linear(model.fc.in_features, out_features)
         model.load_state_dict(new_state, strict=False)
@@ -118,94 +141,90 @@ def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
     scale = min(max_width / w, max_height / h)
     return pil_img.resize((int(w * scale), int(h * scale)))
 
-# ---------------- STREAMLIT UI ----------------
-st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
-
-# --- Theme toggle ---
-theme = st.sidebar.radio("Theme", ["Light", "Dark"], index=0)
-if theme == "Dark":
-    st.markdown(
-        "<style>body, .stApp {background-color:#0e1117; color:white;} .stMarkdown, .stDataFrame {color:white;}</style>",
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown("<style>body, .stApp {background-color:white; color:black;}</style>", unsafe_allow_html=True)
-
-# --- Navbar ---
-st.markdown("""
-    <style>
-    .navbar {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 0.8rem 1.2rem; background-color: rgba(0,0,0,0.05);
-        border-radius: 12px; margin-bottom: 1.2rem;
-    }
-    .navbar-title { font-weight: bold; font-size: 1.3rem; }
-    .navbar-links a { margin-left: 1rem; text-decoration: none; color: #007BFF; }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown(f"""
-<div class="navbar">
-    <div class="navbar-title">🧾 Receipt Forgery Detector</div>
-    <div class="navbar-links">
-        <a href="https://github.com/Sridharan777" target="_blank">GitHub</a>
+# -------- HEADER & NAVBAR --------
+with st.container():
+    st.markdown("""
+    <div style='display:flex;align-items:center;justify-content:space-between;padding:0.9em 1.2em 0.7em 0em;background:rgba(8,16,32,0.17);border-radius:16px;margin-bottom:1.3em;'>
+        <div style='font-weight:bold;font-size:1.5em; letter-spacing:0.5px; color:#70c1b3;'>🧾 Receipt Forgery Detector</div>
+        <a style='color:#4ea1d3;text-decoration:none;font-size:1.1em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+    st.markdown(
+        "<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload one or more receipts to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", 
+        unsafe_allow_html=True
+    )
 
-st.write("Upload one or more receipts to detect forgery with **Grad-CAM visualization** and confidence gauge.")
+# ----------- MAIN APP INTERACTION ---------------
+uploaded_files = st.file_uploader(
+    "Upload receipt image(s)", 
+    type=["png", "jpg", "jpeg"], 
+    accept_multiple_files=True, 
+    help="You can upload multiple receipts at once."
+)
 
-uploaded_files = st.file_uploader("Upload receipt image(s)", type=["png","jpg","jpeg"], accept_multiple_files=True)
-if not uploaded_files: st.stop()
+if not uploaded_files:
+    st.info("No images uploaded. Please add one or more receipt images to begin.")
+    st.stop()
 
 model = load_model()
-if model is None: st.stop()
+if model is None:
+    st.stop()
 
 overlay_buffers = []
+tabs = st.tabs([f"Receipt {i+1}" for i in range(len(uploaded_files))])
 
-for i, uploaded in enumerate(uploaded_files):
-    pil_img = Image.open(uploaded).convert("RGB")
-    resized_img = resize_for_display(pil_img)
-    input_tensor = pil_to_tensor(pil_img)
-    label, confidence, raw_out = predict_single(model, input_tensor)
+for i, (uploaded, tab) in enumerate(zip(uploaded_files, tabs)):
+    with tab:
+        pil_img = Image.open(uploaded).convert("RGB")
+        resized_img = resize_for_display(pil_img)
+        input_tensor = pil_to_tensor(pil_img)
+        label, confidence, raw_out = predict_single(model, input_tensor)
+        cam = compute_gradcam(model, input_tensor)
+        overlay = overlay_heatmap_on_pil(pil_img, cam)
+        overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
+        buf = BytesIO()
+        overlay_resized.save(buf, format="PNG")
+        overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
 
-    # --- Clean Card Layout ---
-    st.markdown(
-        "<div style='background:rgba(0,0,0,0.04); padding:1.2rem; border-radius:1rem; margin-bottom:1rem;'>",
-        unsafe_allow_html=True,
-    )
+        # The result card
+        st.markdown("<div class='result-card'>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([1.1, 1.05, 0.95], gap="medium")
+        with c1:
+            st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
+        with c2:
+            st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+        with c3:
+            st.markdown("<div style='font-size:1.25em'><b>Prediction:</b></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='font-size:2em;font-weight:bold;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>", 
+                unsafe_allow_html=True)
+            st.markdown(
+                f"<span style='font-size:1.1em;color:#8fb9d2;'>Confidence:</span> <b>{confidence:.2%}</b>", 
+                unsafe_allow_html=True
+            )
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number", value=confidence*100,
+                title={'text': "Confidence"},
+                gauge={'axis': {'range': [0, 100]},
+                       'bar': {'color': "#30e394" if "GENUINE" in label else "#ff5264"}}
+            ))
+            st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
+            st.download_button("💾 Download Grad-CAM", buf.getvalue(), file_name=f"gradcam_{i+1}.png", mime="image/png")
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.caption("Go to next tab for more results or download overlays.")
 
-    col1, col2, col3 = st.columns([1.3, 1.3, 0.8], gap="small")
-    with col1:
-        st.image(resized_img, caption=f"📄 Receipt ({label})", use_container_width=False)
-
-    with col2:
-        with st.spinner("🔍 Generating Grad-CAM..."):
-            cam = compute_gradcam(model, input_tensor)
-            overlay = overlay_heatmap_on_pil(pil_img, cam)
-            overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
-            st.image(overlay_resized, caption="🔥 Grad-CAM Overlay", use_container_width=False)
-
-            buf = BytesIO()
-            overlay_resized.save(buf, format="PNG")
-            overlay_buffers.append((f"gradcam_{i}.png", buf.getvalue()))
-
-    with col3:
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number", value=confidence*100,
-            title={'text': "Confidence"},
-            gauge={'axis': {'range': [0, 100]},
-                   'bar': {'color': "#2ecc71" if "GENUINE" in label else "#e74c3c"}}
-        ))
-        st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# --- Download all results as ZIP ---
+# ------- ZIP Download for All Overlays ---------
 if overlay_buffers:
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zipf:
         for fname, data in overlay_buffers:
             zipf.writestr(fname, data)
-    st.download_button("📦 Download All Overlays (ZIP)", zip_buffer.getvalue(),
+    st.download_button("📦 Download ALL Overlays (ZIP)", zip_buffer.getvalue(),
                        file_name="all_gradcams.zip", mime="application/zip")
+
+# --------- BEAUTIFUL FOOTER ----------
+st.markdown("""
+<div style='text-align:center; padding-top:2em; font-size:1em; color:#8fb9d2;'>
+    Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
+</div>
+""", unsafe_allow_html=True)
