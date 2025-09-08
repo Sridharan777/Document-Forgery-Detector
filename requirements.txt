@@ -1,10 +1,12 @@
-streamlit
-streamlit-authenticator
+streamlit==1.25.0
+streamlit-authenticator==0.2.4
 fpdf
 bcrypt
 torch
 torchvision
 plotly
 gdown
-opencv-python-headless==4.6.0.66
+opencv-python-headless
 Pillow
+matplotlib
+numpy
