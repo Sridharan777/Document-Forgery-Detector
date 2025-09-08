@@ -15,7 +15,6 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
-# ---------------- Config ----------------
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
@@ -23,17 +22,15 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
-# ---------- User credentials setup ----------
+# User credentials with bcrypt hashed passwords
 users = {
     "usernames": {
         "alice": {
             "name": "Alice",
-            # bcrypt hash for password 'alicepass'
             "password": "$2b$12$ZiicYZGLRhPDa0/HQsSC5uTqNnaNtSBGTFDEa7BcP6JCsG36izQkG",
         },
         "bob": {
             "name": "Bob",
-            # bcrypt hash for password 'bobpass'
             "password": "$2b$12$1Wgzm99QJMKm7NiO3TgDN.XoXcicUUuuCQxoRwoqc24k6LxjMn7aK",
         },
     }
@@ -41,12 +38,12 @@ users = {
 
 authenticator = stauth.Authenticate(
     credentials=users,
-    cookie_name="streamlit_auth",
-    key="some_random_signature_key_for_security",
+    cookie_name="some_cookie_name",
+    key="some_signature_key",
     cookie_expiry_days=1,
 )
 
-name, authentication_status, username = authenticator.login("Login")
+name, authentication_status, username = authenticator.login("Login", location="main")
 
 if authentication_status:
     st.sidebar.write(f"Welcome {name}")
@@ -283,10 +280,8 @@ if authentication_status:
         grads, acts = gradients[0].squeeze(0), activations[0].squeeze(0)
         weights = grads.mean(dim=(1, 2))
         cam = np.maximum((weights[:, None, None] * acts).sum(dim=0).numpy(), 0)
-        # Use PIL resize instead of cv2.resize
         cam_img = Image.fromarray((255 * ((cam - cam.min()) / (cam.max() - cam.min() + 1e-8))).astype(np.uint8))
         cam_img = cam_img.resize((IMG_SIZE, IMG_SIZE))
-        # Convert to numpy array normalized 0-1
         cam_norm = np.array(cam_img) / 255.0
         return cam_norm
 
@@ -294,7 +289,7 @@ if authentication_status:
         pil_img = pil_img.resize((IMG_SIZE, IMG_SIZE)).convert("RGBA")
         heatmap_uint8 = (cam * 255).astype(np.uint8)
         colormap = cm.get_cmap("jet")
-        heatmap_rgba = colormap(heatmap_uint8 / 255.0, bytes=True)  # RGBA
+        heatmap_rgba = colormap(heatmap_uint8 / 255.0, bytes=True)
         heatmap_img = Image.fromarray(heatmap_rgba, mode="RGBA")
         heatmap_img.putalpha(int(255 * alpha))
         composed = Image.alpha_composite(pil_img, heatmap_img)
