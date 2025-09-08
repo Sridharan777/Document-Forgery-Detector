@@ -12,6 +12,7 @@ import zipfile
 import gdown
 import plotly.graph_objects as go
 from fpdf import FPDF
+import tempfile
 
 # ---------------- Config ----------------
 IMG_SIZE = 224
@@ -277,17 +278,14 @@ def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
     pdf.cell(0, 10, f"Confidence: {confidence:.2%}", 0, 1)
     pdf.ln(10)
 
-    original_buf = BytesIO()
-    original_img.save(original_buf, format='PNG')
-    gradcam_buf = BytesIO()
-    gradcam_img.save(gradcam_buf, format='PNG')
-    original_buf.seek(0)
-    gradcam_buf.seek(0)
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as orig_tmp, tempfile.NamedTemporaryFile(suffix=".png", delete=True) as gradcam_tmp:
+        original_img.save(orig_tmp.name)
+        gradcam_img.save(gradcam_tmp.name)
 
-    pdf.image(original_buf, x=10, y=50, w=80)
-    pdf.image(gradcam_buf, x=110, y=50, w=80)
+        pdf.image(orig_tmp.name, x=10, y=50, w=80)
+        pdf.image(gradcam_tmp.name, x=110, y=50, w=80)
 
-    return pdf.output(dest='S').encode('latin1')
+        return pdf.output(dest='S').encode('latin1')
 
 with st.container():
     st.markdown("""
@@ -346,9 +344,9 @@ if uploaded_files:
             col1, col2, col3 = st.columns([1.1, 1.05, 0.95], gap="medium")
 
             with col1:
-                st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
+                st.image(resized_img, caption=f"📄 Original Receipt", use_container_width=True)
             with col2:
-                st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+                st.image(overlay_resized, caption="🔥 Grad-CAM", use_container_width=True)
             with col3:
                 st.markdown(f"<div style='font-size:1.25em'><b>{tooltip('Prediction:', 'Whether the receipt is Genuine or Forged')}</b></div>", unsafe_allow_html=True)
                 st.markdown(
