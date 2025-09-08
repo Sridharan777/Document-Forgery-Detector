@@ -1,4 +1,3 @@
-# app.py — Redesigned UI with Cards + Smooth Dark/Light Mode
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -124,23 +123,28 @@ def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
 # ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="Receipt Forgery Detector", layout="wide")
 
+# --- Navbar ---
 st.markdown("""
     <style>
-    .result-card {
-        background: var(--background-color);
-        padding: 1.2rem;
-        border-radius: 1rem;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
+    .navbar {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.8rem 1.2rem; background-color: rgba(0,0,0,0.05);
+        border-radius: 12px; margin-bottom: 1.2rem;
     }
-    h2 {
-        text-align: center;
-        margin-bottom: 1rem;
-    }
+    .navbar-title { font-weight: bold; font-size: 1.3rem; }
+    .navbar-links a { margin-left: 1rem; text-decoration: none; color: #007BFF; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🧾 Receipt Forgery Detector")
+st.markdown(f"""
+<div class="navbar">
+    <div class="navbar-title">🧾 Receipt Forgery Detector</div>
+    <div class="navbar-links">
+        <a href="https://github.com/your-repo" target="_blank">GitHub</a>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 st.write("Upload one or more receipts to detect forgery with **Grad-CAM visualization** and confidence gauge.")
 
 uploaded_files = st.file_uploader("Upload receipt image(s)", type=["png","jpg","jpeg"], accept_multiple_files=True)
@@ -149,9 +153,14 @@ if not uploaded_files: st.stop()
 model = load_model()
 if model is None: st.stop()
 
+overlay_buffers = []  # store all Grad-CAM overlays for later download
+
 for i, uploaded in enumerate(uploaded_files):
     with st.container():
-        st.markdown('<div class="result-card">', unsafe_allow_html=True)
+        st.markdown("""
+        <div style='background: var(--background-color); padding: 1.2rem;
+        border-radius: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 1rem;'>
+        """, unsafe_allow_html=True)
 
         pil_img = Image.open(uploaded).convert("RGB")
         resized_img = resize_for_display(pil_img)
@@ -168,9 +177,10 @@ for i, uploaded in enumerate(uploaded_files):
                 overlay = overlay_heatmap_on_pil(pil_img, cam)
                 overlay_resized = Image.fromarray(overlay).resize(resized_img.size)
                 st.image(overlay_resized, caption="🔥 Grad-CAM Overlay", use_container_width=False)
+
                 buf = BytesIO()
                 overlay_resized.save(buf, format="PNG")
-                st.download_button("Download Overlay", buf.getvalue(), file_name=f"gradcam_{i}.png", mime="image/png")
+                overlay_buffers.append((f"gradcam_{i}.png", buf.getvalue()))
 
         with col3:
             fig = go.Figure(go.Indicator(
@@ -182,3 +192,12 @@ for i, uploaded in enumerate(uploaded_files):
             st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Download all results as ZIP ---
+if overlay_buffers:
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        for fname, data in overlay_buffers:
+            zipf.writestr(fname, data)
+    st.download_button("📦 Download All Overlays (ZIP)", zip_buffer.getvalue(),
+                       file_name="all_gradcams.zip", mime="application/zip")
