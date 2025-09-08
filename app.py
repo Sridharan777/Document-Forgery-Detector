@@ -45,7 +45,7 @@ authenticator = stauth.Authenticate(
 )
 
 # Correct login call using positional location parameter
-name, authentication_status, username = authenticator.login("Login", "main")
+name, authentication_status, username = authenticator.login("Login", "unrendered")
 
 if authentication_status:
     st.sidebar.write(f"Welcome {name}")
