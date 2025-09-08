@@ -148,7 +148,7 @@ st.markdown(f"""
 <div class="navbar">
     <div class="navbar-title">🧾 Receipt Forgery Detector</div>
     <div class="navbar-links">
-        <a href="https://github.com/your-repo" target="_blank">GitHub</a>
+        <a href="https://github.com/Sridharan777" target="_blank">GitHub</a>
     </div>
 </div>
 """, unsafe_allow_html=True)
