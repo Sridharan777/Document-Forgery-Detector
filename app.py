@@ -11,7 +11,7 @@ import traceback
 import zipfile
 import gdown
 import plotly.graph_objects as go
-from fpdf import FPDF  # Added for PDF generation
+from fpdf import FPDF
 
 # ---------------- Config ----------------
 IMG_SIZE = 224
@@ -22,11 +22,7 @@ IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 450, 350
 
 # ---------- Page config and Google Fonts ----------
-st.set_page_config(
-    page_title="Receipt Forensics",
-    page_icon="🧾",
-    layout="wide",
-)
+st.set_page_config(page_title="Receipt Forensics", page_icon="🧾", layout="wide")
 
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
@@ -42,10 +38,113 @@ if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
 def apply_theme_css(theme_base):
-    # ... (same CSS as before)
-    # Paste your CSS strings for dark_styles and light_styles here exactly as before (omitted here for brevity)
-    # Use previous apply_theme_css function code here
-    pass
+    dark_styles = """
+        body, .stApp {
+            background-color: #131416;
+            color: #f5f6fa;
+            font-family: 'Montserrat', sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .result-card {
+            background: #21252b;
+            box-shadow: 0 4px 32px #003e9622;
+            border-radius: 1.1em;
+            padding: 1.25em 1.4em 1em 1.4em;
+            margin-bottom: 1.1em;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+            border: none;
+            border-radius: .35em;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%);
+        }
+        a {
+            color: #60c1e3;
+            transition: color 0.4s ease;
+        }
+        .stFileUploader {
+            background-color: #21252b;
+            border-radius: 0.5em;
+            padding: 1em;
+            transition: background-color 0.4s ease;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #181a1f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #3d3f47;
+            border-radius: 10px;
+            border: 2px solid #181a1f;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.4s;
+        }
+    """
+    light_styles = """
+        body, .stApp {
+            background-color: #f9f9f9;
+            color: #141414;
+            font-family: 'Montserrat', sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .result-card {
+            background: #ffffff;
+            box-shadow: 0 4px 32px #aaa;
+            border-radius: 1.1em;
+            padding: 1.25em 1.4em 1em 1.4em;
+            margin-bottom: 1.1em;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+            border: none;
+            border-radius: .35em;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%);
+        }
+        a {
+            color: #007bff;
+            transition: color 0.4s ease;
+        }
+        .stFileUploader {
+            background-color: #ffffff;
+            border-radius: 0.5em;
+            padding: 1em;
+            transition: background-color 0.4s ease;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f9f9f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #a2a2a2;
+            border-radius: 10px;
+            border: 2px solid #f9f9f9;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.4s;
+        }
+    """
+    st.markdown(f"<style>{dark_styles if theme_base == 'Dark' else light_styles}</style>", unsafe_allow_html=True)
 
 apply_theme_css(theme)
 
@@ -59,34 +158,114 @@ def tooltip(label, text):
     """
 
 def download_model_if_missing(gdrive_id: str):
-    # ... unchanged code ...
+    if os.path.exists(MODEL_PATH): return True
+    if not gdrive_id: return False
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    url = f"https://drive.google.com/uc?id={gdrive_id}"
+    try:
+        st.info("📥 Downloading model from Google Drive...")
+        gdown.download(url, MODEL_PATH, quiet=False)
+        return os.path.exists(MODEL_PATH)
+    except Exception as e:
+        st.error(f"Model download failed: {e}")
+        return False
 
 @st.cache_resource(show_spinner=True)
 def load_model():
-    # ... unchanged code ...
+    try:
+        drive_id = None
+        try:
+            drive_id = st.secrets.get("MODEL_GDRIVE_ID", None)
+        except:
+            pass
+        if not os.path.exists(MODEL_PATH):
+            if not download_model_if_missing(drive_id) and not download_model_if_missing(FALLBACK_GDRIVE_ID):
+                st.error("Model not found locally and no valid Drive ID available.")
+                return None
+        ckpt = torch.load(MODEL_PATH, map_location="cpu")
+        state_dict = ckpt
+        if isinstance(ckpt, dict):
+            for key in ("state_dict", "model_state_dict", "net", "state"):
+                if key in ckpt and isinstance(ckpt[key], dict):
+                    state_dict = ckpt[key]
+                    break
+            if state_dict is ckpt and any(k.endswith(".weight") for k in ckpt.keys()):
+                state_dict = ckpt
+        new_state = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        out_features = new_state.get("fc.weight", torch.empty((2,))).shape[0] if "fc.weight" in new_state else 2
+        model = models.resnet50(weights=None)
+        model.fc = nn.Linear(model.fc.in_features, out_features)
+        model.load_state_dict(new_state, strict=False)
+        model.to(DEVICE).eval()
+        return model
+    except Exception as e:
+        st.error(f"Failed to load model: {e}")
+        st.text(traceback.format_exc())
+        return None
 
 def pil_to_tensor(img_pil: Image.Image):
-    # ... unchanged code ...
+    transform = transforms.Compose([
+        transforms.Resize((IMG_SIZE, IMG_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+    ])
+    return transform(img_pil).unsqueeze(0).to(DEVICE)
 
 def predict_single(model, input_tensor):
-    # ... unchanged code ...
+    with torch.no_grad():
+        out = model(input_tensor).to(torch.float32)
+        if out.shape[1] == 1:
+            prob = torch.sigmoid(out)[0, 0].item()
+            return ("FORGED 🔴", prob, out) if prob >= 0.5 else ("GENUINE 🟢", 1.0 - prob, out)
+        probs = torch.softmax(out, dim=1)[0]
+        idx = int(torch.argmax(probs))
+        return ("FORGED 🔴" if idx == 1 else "GENUINE 🟢", float(probs[idx]), out)
 
 def compute_gradcam(model, input_tensor, target_layer=None):
-    # ... unchanged code ...
+    activations, gradients = [], []
+    if target_layer is None: target_layer = model.layer4[-1]
+    def forward_hook(m, i, o): activations.append(o.detach().cpu())
+    def backward_hook(m, gi, go): gradients.append(go[0].detach().cpu())
+    fh = target_layer.register_forward_hook(forward_hook)
+    try:
+        bh = target_layer.register_full_backward_hook(lambda m, gi, go: backward_hook(m, gi, go))
+    except:
+        bh = target_layer.register_backward_hook(lambda m, gi, go: backward_hook(m, gi, go))
+    model.zero_grad()
+    out = model(input_tensor)
+    score = out[:, 0].sum() if out.shape[1] == 1 else out[0, int(torch.argmax(out, dim=1))]
+    score.backward()
+    grads, acts = gradients[0].squeeze(0), activations[0].squeeze(0)
+    weights = grads.mean(dim=(1, 2))
+    cam = np.maximum((weights[:, None, None] * acts).sum(dim=0).numpy(), 0)
+    cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
+    return (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
 
 def overlay_heatmap_on_pil(pil_img, cam, alpha=0.4):
-    # ... unchanged code ...
+    img_resized = np.array(pil_img.resize((IMG_SIZE, IMG_SIZE))).astype(np.uint8)
+    heatmap = np.uint8(255 * cam)
+    heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
+    return cv2.addWeighted(img_resized, 1 - alpha, heatmap_color, alpha, 0)
 
 def resize_for_display(pil_img, max_width=MAX_WIDTH, max_height=MAX_HEIGHT):
-    # ... unchanged code ...
+    w, h = pil_img.size
+    scale = min(max_width / w, max_height / h)
+    return pil_img.resize((int(w * scale), int(h * scale)))
 
 def handle_feedback(file_key, upvote):
-    # ... unchanged code ...
+    if file_key not in st.session_state.feedback:
+        st.session_state.feedback[file_key] = {"up": 0, "down": 0}
+    if upvote:
+        st.session_state.feedback[file_key]["up"] += 1
+    else:
+        st.session_state.feedback[file_key]["down"] += 1
 
 def display_feedback(file_key):
-    # ... unchanged code ...
+    up = st.session_state.feedback.get(file_key, {}).get("up", 0)
+    down = st.session_state.feedback.get(file_key, {}).get("down", 0)
+    st.markdown(f"👍 {up} &nbsp;&nbsp;&nbsp; 👎 {down}")
 
-# ----------- PDF generation for reports -----------
 def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
     pdf = FPDF()
     pdf.add_page()
@@ -98,7 +277,6 @@ def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
     pdf.cell(0, 10, f"Confidence: {confidence:.2%}", 0, 1)
     pdf.ln(10)
 
-    # Save images temporarily in memory
     original_buf = BytesIO()
     original_img.save(original_buf, format='PNG')
     gradcam_buf = BytesIO()
@@ -106,16 +284,22 @@ def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
     original_buf.seek(0)
     gradcam_buf.seek(0)
 
-    # Add images to PDF
     pdf.image(original_buf, x=10, y=50, w=80)
     pdf.image(gradcam_buf, x=110, y=50, w=80)
 
     return pdf.output(dest='S').encode('latin1')
 
-# ---------- Header & Branding ----------
 with st.container():
-    # ... same as before ...
-    pass
+    st.markdown("""
+    <div style='display:flex;align-items:center;justify-content:space-between;padding:0.9em 1.2em 0.7em 0em;background:rgba(8,16,32,0.17);border-radius:16px;margin-bottom:1.3em;font-family: Montserrat, sans-serif;'>
+        <div style='font-weight:bold;font-size:1.5em; letter-spacing:0.5px; color:#70c1b3;'>🧾 Receipt Forgery Detector</div>
+        <a style='color:#4ea1d3;text-decoration:none;font-size:1.1em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>",
+        unsafe_allow_html=True
+    )
 
 st.markdown(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
 uploaded_files = st.file_uploader("", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -183,7 +367,6 @@ if uploaded_files:
                 ))
                 st.plotly_chart(fig, use_container_width=True, key=f"gauge_{i}")
 
-                # PDF Report Download Button
                 pdf_bytes = generate_pdf_report(pil_img, overlay_resized, label, confidence)
                 st.download_button("📄 Download PDF Report", pdf_bytes, file_name=f"report_{i+1}.pdf", mime="application/pdf")
 
@@ -203,14 +386,12 @@ if uploaded_files:
             progress_bar.progress((i + 1) / len(uploaded_files))
     progress_bar.empty()
 
-    # ZIP download of overlays
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zipf:
         for fname, data in overlay_buffers:
             zipf.writestr(fname, data)
     st.download_button("📦 Download ALL Overlays (ZIP)", zip_buffer.getvalue(), file_name="all_gradcams.zip", mime="application/zip")
 
-# ---------- Footer ----------
 st.markdown("""
     <div style='text-align:center; padding-top:2em; font-size:1em; color:#8fb9d2; font-family: Montserrat, sans-serif;'>
         Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
