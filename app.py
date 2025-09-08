@@ -217,10 +217,10 @@ def predict_single(model, input_tensor):
         out = model(input_tensor).to(torch.float32)
         if out.shape[1] == 1:
             prob = torch.sigmoid(out)[0, 0].item()
-            return ("FORGED 🔴", prob, out) if prob >= 0.5 else ("GENUINE 🟢", 1.0 - prob, out)
+            return ("FORGED", prob, out) if prob >= 0.5 else ("GENUINE", 1.0 - prob, out)
         probs = torch.softmax(out, dim=1)[0]
         idx = int(torch.argmax(probs))
-        return ("FORGED 🔴" if idx == 1 else "GENUINE 🟢", float(probs[idx]), out)
+        return ("FORGED" if idx == 1 else "GENUINE", float(probs[idx]), out)
 
 def compute_gradcam(model, input_tensor, target_layer=None):
     activations, gradients = [], []
@@ -274,7 +274,9 @@ def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
     pdf.cell(0, 10, "Receipt Forgery Detection Report", 0, 1, 'C')
     pdf.ln(5)
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Prediction: {prediction}", 0, 1)
+
+    safe_prediction = prediction  # Removed emojis for PDF compatibility
+    pdf.cell(0, 10, f"Prediction: {safe_prediction}", 0, 1)
     pdf.cell(0, 10, f"Confidence: {confidence:.2%}", 0, 1)
     pdf.ln(10)
 
