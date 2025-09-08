@@ -342,9 +342,9 @@ if uploaded_files:
             col1, col2, col3 = st.columns([1.1, 1.05, 0.95], gap="medium")
 
             with col1:
-                st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
+                st.image(resized_img, caption=f"📄 Original Receipt", use_container_width=True)
             with col2:
-                st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+                st.image(overlay_resized, caption="🔥 Grad-CAM", use_container_width=True)
             with col3:
                 st.markdown(f"<div style='font-size:1.25em'><b>{tooltip('Prediction:', 'Whether the receipt is Genuine or Forged')}</b></div>", unsafe_allow_html=True)
                 st.markdown(
