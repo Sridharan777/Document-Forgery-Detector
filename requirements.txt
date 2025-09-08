@@ -8,3 +8,4 @@ opencv-python-headless
 plotly
 matplotlib
 fpdf
+streamlit-authenticator
