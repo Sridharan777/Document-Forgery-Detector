@@ -24,25 +24,72 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom styles for shadowed cards, buttons, confidence colors
-st.markdown("""
-    <style>
-        .result-card {
-            background: #21252b;
-            border-radius: 1.1em;
-            box-shadow: 0 4px 32px #003e9622;
-            padding: 1.25em 1.4em 1em 1.4em;
-            margin-bottom: 1.1em;
-        }
-        .stButton>button {
-            color: #fff;
-            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
-            border: none;
-            border-radius: .35em;
-            font-weight: 600;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# -------- THEME TOGGLE IN SIDEBAR -----------
+theme = st.sidebar.radio("Select Theme", ["Light", "Dark"], index=1, help="Switch between Light and Dark mode.")
+
+# Apply CSS styles dynamically based on theme
+if theme == "Dark":
+    st.markdown("""
+        <style>
+            body, .stApp {
+                background-color: #131416;
+                color: #f5f6fa;
+            }
+            .result-card {
+                background: #21252b;
+                box-shadow: 0 4px 32px #003e9622;
+                border-radius: 1.1em;
+                padding: 1.25em 1.4em 1em 1.4em;
+                margin-bottom: 1.1em;
+            }
+            .stButton>button {
+                color: #fff;
+                background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+                border: none;
+                border-radius: .35em;
+                font-weight: 600;
+            }
+            a {
+                color: #60c1e3;
+            }
+            .stFileUploader {
+                background-color: #21252b;
+                border-radius: 0.5em;
+                padding: 1em;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+        <style>
+            body, .stApp {
+                background-color: #f9f9f9;
+                color: #141414;
+            }
+            .result-card {
+                background: #ffffff;
+                box-shadow: 0 4px 32px #aaa;
+                border-radius: 1.1em;
+                padding: 1.25em 1.4em 1em 1.4em;
+                margin-bottom: 1.1em;
+            }
+            .stButton>button {
+                color: #fff;
+                background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%);
+                border: none;
+                border-radius: .35em;
+                font-weight: 600;
+            }
+            a {
+                color: #007bff;
+            }
+            .stFileUploader {
+                background-color: #ffffff;
+                border-radius: 0.5em;
+                padding: 1em;
+            }
+        </style>
+        """, unsafe_allow_html=True)
 
 # ------------ HELPERS (same as before) ------------
 def download_model_if_missing(gdrive_id: str):
