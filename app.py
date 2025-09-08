@@ -284,7 +284,7 @@ with st.container():
     </div>
     """, unsafe_allow_html=True)
     st.markdown(
-        f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>",
+        f"<p style='color:#0a0a0a;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>",
         unsafe_allow_html=True
     )
 
@@ -298,7 +298,7 @@ def tooltip(label, text):
         </span>
     """
 
-st.markdown(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
+st.markdown(tooltip("", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
 uploaded_files = st.file_uploader("", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 if uploaded_files:
