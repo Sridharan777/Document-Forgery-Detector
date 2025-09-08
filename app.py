@@ -197,7 +197,7 @@ with st.container():
     </div>
     """, unsafe_allow_html=True)
     st.markdown(
-        "<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload one or more receipts to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", 
+        "<p style='color:#0a0a0a;font-size:1.13em;margin-bottom:1.7em;'>Upload one or more receipts to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", 
         unsafe_allow_html=True
     )
 
