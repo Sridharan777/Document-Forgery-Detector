@@ -190,9 +190,9 @@ for i, (uploaded, tab) in enumerate(zip(uploaded_files, tabs)):
         st.markdown("<div class='result-card'>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns([1.1, 1.05, 0.95], gap="medium")
         with c1:
-            st.image(resized_img, caption=f"📄 Original Receipt", use_column_width=True)
+            st.image(resized_img, caption=f"📄 Original Receipt", use_container_width=True)
         with c2:
-            st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+            st.image(overlay_resized, caption="🔥 Grad-CAM", use_container_width=True)
         with c3:
             st.markdown("<div style='font-size:1.25em'><b>Prediction:</b></div>", unsafe_allow_html=True)
             st.markdown(
