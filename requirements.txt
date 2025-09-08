@@ -9,3 +9,5 @@ plotly
 matplotlib
 fpdf
 streamlit-authenticator
+opencv-python
+bcrypt
