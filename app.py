@@ -14,12 +14,99 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
-# ----------- Page config and CSS for larger dashboard -----------
+# --------- Custom dark theme CSS to match your app colors ----------
+st.markdown("""
+<style>
+/* Background and text */
+body, .stApp {
+    background-color: #121517 !important;
+    color: #e4e9ee !important;
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Links */
+a {
+    color: #60c1e3 !important;
+    transition: color 0.4s ease;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+    color: #70c1b3 !important;
+    font-weight: 700;
+}
+
+/* Result cards */
+.result-card {
+    background: #21252b !important;
+    box-shadow: 0 4px 32px #003e9622 !important;
+    border-radius: 1.1em !important;
+    padding: 1.25em 1.4em 1em 1.4em !important;
+    margin-bottom: 1.1em !important;
+    transition: background-color 0.4s ease;
+}
+
+/* Buttons */
+.stButton>button {
+    color: #fff !important;
+    background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%) !important;
+    border: none !important;
+    border-radius: .35em !important;
+    font-weight: 600 !important;
+    font-size: 1.1em !important;
+    transition: background 0.3s ease;
+}
+
+.stButton>button:hover {
+    background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%) !important;
+    cursor: pointer;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #21252b !important;
+    color: #e4e9ee !important;
+}
+
+/* Sidebar inputs */
+[data-testid="stSidebar"] .stTextInput>div>div>input {
+    background-color: #2a2e37 !important;
+    color: #e4e9ee !important;
+    border: none !important;
+    border-radius: 0.3em !important;
+}
+
+/* File uploader */
+.stFileUploader {
+    background-color: #21252b !important;
+    border-radius: 0.5em !important;
+    padding: 1em !important;
+    transition: background-color 0.4s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px !important;
+}
+
+::-webkit-scrollbar-track {
+    background: #181a1f !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #3d3f47 !important;
+    border-radius: 10px !important;
+    border: 2px solid #181a1f !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ----------- Page config and CSS for landscape layout and transitions -----------
 st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 .result-card {
-    background: #1f2937;
+    background: #21252b;
     border-radius: 16px;
     padding: 28px;
     max-width: 980px !important;
@@ -28,6 +115,9 @@ st.markdown("""
     margin-right: auto;
     font-size: 1.14em;
     box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    margin-bottom: 1.2em;
 }
 .result-card:hover {
     transform: translateY(-7px);
@@ -67,7 +157,7 @@ MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-MAX_HEIGHT, MAX_WIDTH = 600, 480  # made bigger for wider dashboard
+MAX_HEIGHT, MAX_WIDTH = 600, 480
 
 def download_model_if_missing(gdrive_id):
     if os.path.exists(MODEL_PATH): return True
@@ -223,11 +313,11 @@ def draw_confidence_gauge(confidence, label):
 # ----------- App Heading -----------
 st.markdown("""
     <div style='display:flex;align-items:center;justify-content:space-between;padding:1.3em 2.2em 1em 0em;background:rgba(8,16,32,0.12);border-radius:22px;margin-bottom:1.5em;font-family: Montserrat, sans-serif;'>
-        <div style='font-weight:700;font-size:2em;letter-spacing:0.6px; color:#2563eb;'>🧾 Receipt Forgery Detector</div>
-        <a style='color:#1682e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
+        <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Receipt Forgery Detector</div>
+        <a style='color:#60c1e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
 """, unsafe_allow_html=True)
-st.markdown("<p style='color:#374151;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect forgery with deep learning and visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#d1d5db;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect forgery with deep learning and visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
 
 # ----------- Upload and History -----------
 if "upload_history" not in st.session_state:
@@ -244,7 +334,7 @@ if uploaded_files:
 with st.sidebar.expander("Upload History 🕒", expanded=False):
     if st.session_state.upload_history:
         for fname in st.session_state.upload_history:
-            st.write(f"- {fname}")
+            st.markdown(f"• {fname}", unsafe_allow_html=True)
     else:
         st.write("No upload history yet.")
 
@@ -284,7 +374,14 @@ if uploaded_files:
                 st.image(overlay_resized, caption="Grad-CAM", use_column_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with col3:
-                st.markdown(f"<div style='font-size:1.19em;font-weight:600;margin-bottom:12px;color:#2563eb'>{label} prediction</div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div style='text-align:center; font-size:2em; font-weight:700; color:#60c1e3; letter-spacing:1px; margin-bottom:0.3em;'>
+                        🏆 Prediction Result
+                    </div>
+                    <div style='text-align:center; font-size:1.5em; font-weight:600; color:{ '#30e394' if label=='GENUINE' else '#ff5264' }; margin-bottom:0.3em;'>
+                        {label} { '✓' if label == 'GENUINE' else '⚠️' }
+                    </div>
+                """, unsafe_allow_html=True)
                 draw_confidence_gauge(confidence, label)
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.download_button(
@@ -305,6 +402,6 @@ if uploaded_files:
 
 st.markdown("""
     <div style='text-align:center; padding-top:2em; font-size:1.15em; color:#8585a1; font-family: Montserrat, sans-serif;'>
-        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#2563eb;' target="_blank">Source on GitHub</a>
+        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
     </div>
 """, unsafe_allow_html=True)
