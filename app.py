@@ -14,94 +14,152 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
-# --------- Custom dark theme CSS to match your app colors ----------
-st.markdown("""
-<style>
-/* Background and text */
-body, .stApp {
-    background-color: #121517 !important;
-    color: #e4e9ee !important;
-    font-family: 'Montserrat', sans-serif;
-}
+# --------- Theme toggle & CSS injection ----------
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Dark"  # Default
 
-/* Links */
-a {
-    color: #60c1e3 !important;
-    transition: color 0.4s ease;
-}
+def set_theme_css(mode):
+    if mode == "Dark":
+        css = """
+        body, .stApp {
+            background-color: #121517 !important;
+            color: #e4e9ee !important;
+            font-family: 'Montserrat', sans-serif;
+        }
+        a {
+            color: #60c1e3 !important;
+            transition: color 0.4s ease;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #70c1b3 !important;
+            font-weight: 700;
+        }
+        .result-card {
+            background: #21252b !important;
+            box-shadow: 0 4px 32px #003e9622 !important;
+            border-radius: 1.1em !important;
+            padding: 1.25em 1.4em 1em 1.4em !important;
+            margin-bottom: 1.1em !important;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff !important;
+            background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%) !important;
+            border: none !important;
+            border-radius: .35em !important;
+            font-weight: 600 !important;
+            font-size: 1.1em !important;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%) !important;
+            cursor: pointer;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #21252b !important;
+            color: #e4e9ee !important;
+        }
+        [data-testid="stSidebar"] .stTextInput>div>div>input {
+            background-color: #2a2e37 !important;
+            color: #e4e9ee !important;
+            border: none !important;
+            border-radius: 0.3em !important;
+        }
+        .stFileUploader {
+            background-color: #21252b !important;
+            border-radius: 0.5em !important;
+            padding: 1em !important;
+            transition: background-color 0.4s ease;
+        }
+        ::-webkit-scrollbar {
+            width: 8px !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: #181a1f !important;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #3d3f47 !important;
+            border-radius: 10px !important;
+            border: 2px solid #181a1f !important;
+        }
+        body, .stApp, .result-card:hover {
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        """
+    else:  # Light theme CSS
+        css = """
+        body, .stApp {
+            background-color: #f9f9f9 !important;
+            color: #141414 !important;
+            font-family: 'Montserrat', sans-serif;
+        }
+        a {
+            color: #007bff !important;
+            transition: color 0.4s ease;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #2563eb !important;
+            font-weight: 700;
+        }
+        .result-card {
+            background: #ffffff !important;
+            box-shadow: 0 4px 32px #aaa !important;
+            border-radius: 1.1em !important;
+            padding: 1.25em 1.4em 1em 1.4em !important;
+            margin-bottom: 1.1em !important;
+            transition: background-color 0.4s ease;
+        }
+        .stButton>button {
+            color: #fff !important;
+            background: linear-gradient(90deg,#007bff 60%,#5a86ff 100%) !important;
+            border: none !important;
+            border-radius: .35em !important;
+            font-weight: 600 !important;
+            font-size: 1.1em !important;
+            transition: background 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg,#5a86ff 60%,#007bff 100%) !important;
+            cursor: pointer;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #ffffff !important;
+            color: #141414 !important;
+        }
+        [data-testid="stSidebar"] .stTextInput>div>div>input {
+            background-color: #fafafa !important;
+            color: #141414 !important;
+            border: 1px solid #ddd !important;
+            border-radius: 0.3em !important;
+        }
+        .stFileUploader {
+            background-color: #ffffff !important;
+            border-radius: 0.5em !important;
+            padding: 1em !important;
+            transition: background-color 0.4s ease;
+        }
+        ::-webkit-scrollbar {
+            width: 8px !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f0f0f0 !important;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #b0b0b0 !important;
+            border-radius: 10px !important;
+            border: 2px solid #f0f0f0 !important;
+        }
+        body, .stApp, .result-card:hover {
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        """
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
-/* Headers */
-h1, h2, h3, h4, h5, h6 {
-    color: #70c1b3 !important;
-    font-weight: 700;
-}
+theme_choice = st.sidebar.radio("Select Theme", ["Light", "Dark"], index=1, key="theme_mode")
+set_theme_css(theme_choice)
 
-/* Result cards */
-.result-card {
-    background: #21252b !important;
-    box-shadow: 0 4px 32px #003e9622 !important;
-    border-radius: 1.1em !important;
-    padding: 1.25em 1.4em 1em 1.4em !important;
-    margin-bottom: 1.1em !important;
-    transition: background-color 0.4s ease;
-}
+# ----------- Wide layout and card styles -----------
 
-/* Buttons */
-.stButton>button {
-    color: #fff !important;
-    background: linear-gradient(90deg,#007BFF 60%,#5f61e6 100%) !important;
-    border: none !important;
-    border-radius: .35em !important;
-    font-weight: 600 !important;
-    font-size: 1.1em !important;
-    transition: background 0.3s ease;
-}
-
-.stButton>button:hover {
-    background: linear-gradient(90deg,#5f61e6 60%,#007BFF 100%) !important;
-    cursor: pointer;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background-color: #21252b !important;
-    color: #e4e9ee !important;
-}
-
-/* Sidebar inputs */
-[data-testid="stSidebar"] .stTextInput>div>div>input {
-    background-color: #2a2e37 !important;
-    color: #e4e9ee !important;
-    border: none !important;
-    border-radius: 0.3em !important;
-}
-
-/* File uploader */
-.stFileUploader {
-    background-color: #21252b !important;
-    border-radius: 0.5em !important;
-    padding: 1em !important;
-    transition: background-color 0.4s ease;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-    width: 8px !important;
-}
-
-::-webkit-scrollbar-track {
-    background: #181a1f !important;
-}
-
-::-webkit-scrollbar-thumb {
-    background-color: #3d3f47 !important;
-    border-radius: 10px !important;
-    border: 2px solid #181a1f !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ----------- Page config and CSS for landscape layout and transitions -----------
 st.set_page_config(layout="wide")
 st.markdown("""
 <style>
@@ -151,13 +209,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------- Config -----------
+# ----------- Your existing ML and UI functions below -----------
+
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 MAX_HEIGHT, MAX_WIDTH = 600, 480
+
 
 def download_model_if_missing(gdrive_id):
     if os.path.exists(MODEL_PATH): return True
@@ -310,16 +370,17 @@ def draw_confidence_gauge(confidence, label):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# ----------- App Heading -----------
+# ----------- App heading and intro -----------
 st.markdown("""
     <div style='display:flex;align-items:center;justify-content:space-between;padding:1.3em 2.2em 1em 0em;background:rgba(8,16,32,0.12);border-radius:22px;margin-bottom:1.5em;font-family: Montserrat, sans-serif;'>
         <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Receipt Forgery Detector</div>
         <a style='color:#60c1e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
 """, unsafe_allow_html=True)
+
 st.markdown("<p style='color:#d1d5db;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect forgery with deep learning and visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
 
-# ----------- Upload and History -----------
+# ----------- Upload and history -----------
 if "upload_history" not in st.session_state:
     st.session_state.upload_history = []
 if "feedback" not in st.session_state:
@@ -338,13 +399,13 @@ with st.sidebar.expander("Upload History 🕒", expanded=False):
     else:
         st.write("No upload history yet.")
 
-# ----------- Model Loading -----------
+# ----------- Model loading -----------
 with st.spinner("🧠 Loading detection model, please wait..."):
     model = load_model()
 if model is None:
     st.stop()
 
-# ----------- Prediction and Display -----------
+# ----------- Prediction and display -----------
 if uploaded_files:
     overlay_buffers = []
     tabs = st.tabs([f"Receipt {i+1}" for i in range(len(uploaded_files))])
@@ -362,7 +423,6 @@ if uploaded_files:
             buf = BytesIO()
             overlay_resized.save(buf, format="PNG")
             overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
-            # ---------- Stylish Card with Responsive Gauge ----------
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1.2, 1.1, 1.2], gap="medium")
             with col1:
