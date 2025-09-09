@@ -427,11 +427,11 @@ if uploaded_files:
             col1, col2, col3 = st.columns([1.2, 1.1, 1.2], gap="medium")
             with col1:
                 st.markdown('<div class="hover-zoom">', unsafe_allow_html=True)
-                st.image(resized_img, caption="Original Receipt", use_column_width=True)
+                st.image(resized_img, caption="Original Receipt", use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with col2:
                 st.markdown('<div class="hover-zoom">', unsafe_allow_html=True)
-                st.image(overlay_resized, caption="Grad-CAM", use_column_width=True)
+                st.image(overlay_resized, caption="Grad-CAM", use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with col3:
                 st.markdown(f"""
