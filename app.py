@@ -14,41 +14,49 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
-# ----------- CSS for Smooth Transitions and Hover Effects -----------
+# ----------- Page config and CSS for larger dashboard -----------
+st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 .result-card {
     background: #1f2937;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    cursor: pointer;
-    margin-bottom: 1.2em;
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 980px !important;
+    width: 96vw !important;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 1.14em;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.18);
 }
 .result-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 12px 30px rgba(0,123,255,0.7);
+    transform: translateY(-7px);
+    box-shadow: 0 14px 34px rgba(0,123,255,0.15);
 }
 .stButton>button {
     background: linear-gradient(90deg, #3b82f6 60%, #2563eb 100%);
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     color: white;
     font-weight: bold;
-    padding: 10px 24px;
+    font-size: 1.15em;
+    padding: 12px 28px;
     transition: background 0.3s ease, transform 0.2s ease;
 }
 .stButton>button:hover {
     background: linear-gradient(90deg, #2563eb 60%, #3b82f6 100%);
-    transform: scale(1.05);
+    transform: scale(1.06);
 }
 .hover-zoom img {
     transition: transform 0.3s ease;
-    border-radius: 12px;
+    border-radius: 15px;
 }
 .hover-zoom:hover img {
     transform: scale(1.05);
+}
+.stPlotlyChart > div {
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -59,44 +67,7 @@ MODEL_PATH = "models/best_resnet50.pth"
 FALLBACK_GDRIVE_ID = "1w4EufvzDfAeVpvL7hfyFdqOce67XV8ks"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-MAX_HEIGHT, MAX_WIDTH = 450, 350
-
-# ----------- Theme Toggle -----------
-def apply_theme_css(theme_base):
-    dark_styles = """
-        body, .stApp {
-            background-color: #131416;
-            color: #f5f6fa;
-            font-family: 'Montserrat', sans-serif;
-        }
-        a {
-            color: #60c1e3;
-        }
-    """
-    light_styles = """
-        body, .stApp {
-            background-color: #f9f9f9;
-            color: #141414;
-            font-family: 'Montserrat', sans-serif;
-        }
-        a {
-            color: #007bff;
-        }
-    """
-    st.markdown(f"<style>{dark_styles if theme_base == 'Dark' else light_styles}</style>", unsafe_allow_html=True)
-
-theme_choice = st.sidebar.radio("Select Theme", ["Light", "Dark"], index=1)
-apply_theme_css(theme_choice)
-
-# ----------- Utility Functions -----------
-def tooltip(label, text):
-    return f"""<span style="border-bottom:1px dotted; cursor:help; position: relative;">{label}
-        <span style="visibility:hidden; opacity:0; width: 210px; background-color: #555; color: #fff; text-align: center;
-        border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1;
-        bottom: 125%; left: 50%; margin-left: -105px; font-size: 0.85em; transition: opacity 0.3s;">
-        {text}</span>
-        </span>
-    """
+MAX_HEIGHT, MAX_WIDTH = 600, 480  # made bigger for wider dashboard
 
 def download_model_if_missing(gdrive_id):
     if os.path.exists(MODEL_PATH): return True
@@ -216,15 +187,47 @@ def generate_pdf_report(original_img, gradcam_img, prediction, confidence):
         pdf.image(gradcam_tmp.name, x=110, y=50, w=80)
         return pdf.output(dest='S').encode('latin1')
 
+def draw_confidence_gauge(confidence, label):
+    color = "#30e394" if label == "GENUINE" else "#ff5264"
+    arrow_color = "#30e394" if label == "GENUINE" else "#ff5264"
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=round(confidence * 100),
+        title={'text': "Confidence", "font": {"size": 32}},
+        number={"suffix": "%", "font": {"size": 54}},
+        delta={"reference": 50, "increasing": {"color": arrow_color}, "decreasing": {"color": arrow_color}, "font": {"size":22}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 2, "tickcolor": "#cbd5e1"},
+            "bar": {"color": color, "thickness": 0.38},
+            "bgcolor": "#f6f7fa",
+            "borderwidth": 2,
+            "bordercolor": "#e2e8f0",
+            "steps": [
+                {"range": [0, 50], "color": "#fee2e2"},
+                {"range": [50, 100], "color": "#d1e7dd"},
+            ],
+            "threshold": {
+                "line": {"color": color, "width": 8},
+                "thickness": 0.85,
+                "value": confidence * 100,
+            }
+        }
+    ))
+    fig.update_layout(
+        margin=dict(t=0, b=0, l=0, r=0),
+        width=370, height=340,
+        paper_bgcolor="#f8fafc"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 # ----------- App Heading -----------
 st.markdown("""
-    <div style='display:flex;align-items:center;justify-content:space-between;padding:0.9em 1.2em 0.7em 0em;background:rgba(8,16,32,0.17);border-radius:16px;margin-bottom:1.3em;font-family: Montserrat, sans-serif;'>
-        <div style='font-weight:bold;font-size:1.5em; letter-spacing:0.5px; color:#70c1b3;'>🧾 Receipt Forgery Detector</div>
-        <a style='color:#4ea1d3;text-decoration:none;font-size:1.1em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
+    <div style='display:flex;align-items:center;justify-content:space-between;padding:1.3em 2.2em 1em 0em;background:rgba(8,16,32,0.12);border-radius:22px;margin-bottom:1.5em;font-family: Montserrat, sans-serif;'>
+        <div style='font-weight:700;font-size:2em;letter-spacing:0.6px; color:#2563eb;'>🧾 Receipt Forgery Detector</div>
+        <a style='color:#1682e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
 """, unsafe_allow_html=True)
-st.markdown(f"<p style='color:#e4e9ee;font-size:1.13em;margin-bottom:1.7em;'>Upload receipt image(s) to detect forgery using deep learning and get visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
-st.markdown(tooltip("Upload receipt image(s) 📁", "Allowed: PNG, JPG, JPEG. You can upload multiple images at once."), unsafe_allow_html=True)
+st.markdown("<p style='color:#374151;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect forgery with deep learning and visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
 
 # ----------- Upload and History -----------
 if "upload_history" not in st.session_state:
@@ -232,7 +235,7 @@ if "upload_history" not in st.session_state:
 if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
-uploaded_files = st.file_uploader("", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Receipt image(s)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 if uploaded_files:
     for f in uploaded_files:
         if f.name not in st.session_state.upload_history:
@@ -261,7 +264,7 @@ if uploaded_files:
             pil_img = Image.open(uploaded).convert("RGB")
             resized_img = resize_for_display(pil_img)
             input_tensor = pil_to_tensor(pil_img)
-            with st.spinner(f"Processing {uploaded.name}..."):
+            with st.spinner(f"Processing {uploaded.name} ..."):
                 label, confidence, raw_out = predict_single(model, input_tensor)
                 cam = compute_gradcam(model, input_tensor)
                 overlay = overlay_heatmap_on_pil(pil_img, cam)
@@ -269,23 +272,27 @@ if uploaded_files:
             buf = BytesIO()
             overlay_resized.save(buf, format="PNG")
             overlay_buffers.append((f"gradcam_{i+1}.png", buf.getvalue()))
-            # ---------- Stylish Card with Hover and Transitions -------
+            # ---------- Stylish Card with Responsive Gauge ----------
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
-            col1, col2, col3 = st.columns([1.1, 1.05, 0.95], gap="medium")
+            col1, col2, col3 = st.columns([1.2, 1.1, 1.2], gap="medium")
             with col1:
                 st.markdown('<div class="hover-zoom">', unsafe_allow_html=True)
-                st.image(resized_img, caption="📄 Original Receipt", use_column_width=True)
+                st.image(resized_img, caption="Original Receipt", use_column_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with col2:
                 st.markdown('<div class="hover-zoom">', unsafe_allow_html=True)
-                st.image(overlay_resized, caption="🔥 Grad-CAM", use_column_width=True)
+                st.image(overlay_resized, caption="Grad-CAM", use_column_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with col3:
-                st.markdown(f"<div style='font-size:1.25em'><b>{tooltip('Prediction:', 'Whether the receipt is Genuine or Forged')}</b></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-weight:bold;font-size:2em;margin-top:0.22em;color:{'#30e394' if 'GENUINE' in label else '#ff5264'}'>{label}</div>", unsafe_allow_html=True)
-                st.markdown(f"<span style='font-size:1.1em;color:#8fb9d2;'>{tooltip('Confidence:', 'Confidence score of the prediction')}</span> <b>{confidence:.2%}</b>", unsafe_allow_html=True)
-                if st.download_button("📄 Download PDF Report", generate_pdf_report(pil_img, overlay_resized, label, confidence), file_name=f"report_{i+1}.pdf", mime="application/pdf"):
-                    st.success("Report downloaded successfully!")
+                st.markdown(f"<div style='font-size:1.19em;font-weight:600;margin-bottom:12px;color:#2563eb'>{label} prediction</div>", unsafe_allow_html=True)
+                draw_confidence_gauge(confidence, label)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.download_button(
+                    "Download PDF Report",
+                    generate_pdf_report(pil_img, overlay_resized, label, confidence),
+                    file_name=f"report_{i+1}.pdf",
+                    mime="application/pdf"
+                )
             st.markdown('</div>', unsafe_allow_html=True)
             st.caption("Switch tabs to view more receipts or download Grad-CAM images.")
             progress_bar.progress((i + 1) / len(uploaded_files))
@@ -294,10 +301,10 @@ if uploaded_files:
     with zipfile.ZipFile(zip_buffer, "w") as zipf:
         for fname, data in overlay_buffers:
             zipf.writestr(fname, data)
-    st.download_button("📦 Download ALL Overlays (ZIP)", zip_buffer.getvalue(), file_name="all_gradcams.zip", mime="application/zip")
+    st.download_button("Download ALL Overlays (ZIP)", zip_buffer.getvalue(), file_name="all_gradcams.zip", mime="application/zip")
 
 st.markdown("""
-    <div style='text-align:center; padding-top:2em; font-size:1em; color:#8fb9d2; font-family: Montserrat, sans-serif;'>
-        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
+    <div style='text-align:center; padding-top:2em; font-size:1.15em; color:#8585a1; font-family: Montserrat, sans-serif;'>
+        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#2563eb;' target="_blank">Source on GitHub</a>
     </div>
 """, unsafe_allow_html=True)
