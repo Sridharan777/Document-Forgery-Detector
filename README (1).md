@@ -1,11 +1,11 @@
-# 🧾 Receipt Forgery Detection (with Explainable AI)
+# 🧾 Document Forgery Detection (Receipt)
 
-🚀 **AI-powered web app** that detects whether a receipt is **genuine** or **forged** using a deep learning model (ResNet50).  
+ **AI-powered web app** that detects whether a receipt is **genuine** or **forged** using a deep learning model (ResNet50).  
 Built with **PyTorch, Streamlit, and Grad-CAM** for full transparency and explainability.  
 
 ---
 
-## ✨ Features
+##  Features
 ✅ **AI Model:** ResNet50 CNN (high accuracy, trained on custom dataset)  
 ✅ **Explainable AI:** Grad-CAM heatmaps highlight which parts of the receipt the model used  
 ✅ **Confidence Gauge:** Shows how sure the model is (green = genuine, red = forged)  
@@ -14,7 +14,7 @@ Built with **PyTorch, Streamlit, and Grad-CAM** for full transparency and explai
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 ```
 📁 document-forgery-detection
  ┣ 📁 my_dataset/       # Training, validation, and test data (images + labels)
@@ -27,7 +27,7 @@ Built with **PyTorch, Streamlit, and Grad-CAM** for full transparency and explai
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 - **Deep Learning:** PyTorch + torchvision  
 - **Model:** ResNet50 (transfer learning)  
 - **Visualization:** Grad-CAM (manual hooks)  
@@ -36,29 +36,28 @@ Built with **PyTorch, Streamlit, and Grad-CAM** for full transparency and explai
 
 ---
 
-## 🔑 How It Works
-1. 📤 **Upload a receipt image**  
-2. 🤖 **Model predicts** whether it’s Genuine or Forged  
-3. 🎯 **Confidence score** shows model’s certainty  
-4. 🔍 **Grad-CAM heatmap** highlights important areas the model looked at  
+##  How It Works
+1.  **Upload a receipt image**  
+2.  **Model predicts** whether it’s Genuine or Forged  
+3.  **Confidence score** shows model’s certainty  
+4.  **Grad-CAM heatmap** highlights important areas the model looked at  
 
 ---
 
-## 🌍 Real-World Use Cases
-- 🏦 **Banks & Finance:** Detect fake invoices or forged receipts in claims  
-- 🛒 **Retail:** Prevent fraud in return/refund systems  
-- 🧾 **Auditing:** Automate verification of large-scale financial transactions  
+##  Real-World Use Cases
+-  **Banks & Finance:** Detect fake invoices or forged receipts in claims  
+-  **Retail:** Prevent fraud in return/refund systems  
+-  **Auditing:** Automate verification of large-scale financial transactions  
 
 ---
 
-## 🏆 Results
-- 📊 **Validation Accuracy:** ~90% after class balancing  
-- 🔎 **Better explainability** with Grad-CAM → Recruiters can *see* what the model is thinking  
+##  Results
+-  **Validation Accuracy:** ~90% after class balancing  
+-  **Better explainability** with Grad-CAM → Recruiters can *see* what the model is thinking  
 
 ---
 
-## 👨‍💻 Author
-**Sridharan M**  
-💼 Junior ML Engineer | 📍 Open to Opportunities  
-📧 Email: *your_email@example.com*  
-🔗 LinkedIn: *https://linkedin.com/in/your-link*  
+##  Author
+**Sridharan M**    
+ Email: *sridharan22092003@gamil.com.com*  
+ LinkedIn: *https://www.linkedin.com/in/sridharan-m-155a29230/*  
