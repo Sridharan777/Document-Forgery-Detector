@@ -53,7 +53,7 @@ Built with **PyTorch, Streamlit, and Grad-CAM** for full transparency and explai
 
 ##  Results
 -  **Validation Accuracy:** ~90% after class balancing  
--  **Better explainability** with Grad-CAM → Recruiters can *see* what the model is thinking  
+-  **Better explainability** with Grad-CAM 
 
 ---
 
