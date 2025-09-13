@@ -462,6 +462,6 @@ if uploaded_files:
 
 st.markdown("""
     <div style='text-align:center; padding-top:2em; font-size:1.15em; color:#8585a1; font-family: Montserrat, sans-serif;'>
-        Built using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
+        Built using Streamlit • <a href="https://github.com/Sridharan777/Document-Forgery-Detector" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
     </div>
 """, unsafe_allow_html=True)
