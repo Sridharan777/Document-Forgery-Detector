@@ -373,7 +373,7 @@ def draw_confidence_gauge(confidence, label):
 # ----------- App heading -----------
 st.markdown("""
     <div style='display:flex;align-items:center;justify-content:space-between;padding:1.3em 2.2em 1em 0em;background:rgba(8,16,32,0.12);border-radius:22px;margin-bottom:1.5em;font-family: Montserrat, sans-serif;'>
-        <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Document Forgery Detector(Receipt(s))</div>
+        <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Document Forgery Detector</div>
         <a style='color:#60c1e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
 """, unsafe_allow_html=True)
@@ -462,6 +462,6 @@ if uploaded_files:
 
 st.markdown("""
     <div style='text-align:center; padding-top:2em; font-size:1.15em; color:#8585a1; font-family: Montserrat, sans-serif;'>
-        Built with ❤️ using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
+        Built using Streamlit • <a href="https://github.com/Sridharan777" style='color:#60c1e3;' target="_blank">Source on GitHub</a>
     </div>
 """, unsafe_allow_html=True)
