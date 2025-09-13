@@ -16,7 +16,7 @@ import matplotlib.cm as cm
 
 # --------- Theme toggle & CSS injection ----------
 if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "White"  # Default
+    st.session_state.theme_mode = "Dark"  # Default
 
 def set_theme_css(mode):
     if mode == "Dark":
