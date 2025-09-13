@@ -14,9 +14,9 @@ from fpdf import FPDF
 import tempfile
 import matplotlib.cm as cm
 
-# --------- Theme toggle & CSS injection ----------
+# --------- Theme  & CSS  ----------
 if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Dark"  # Default
+    st.session_state.theme_mode = "Dark"  
 
 def set_theme_css(mode):
     if mode == "Dark":
@@ -158,7 +158,7 @@ def set_theme_css(mode):
 theme_choice = st.sidebar.radio("Select Theme", ["Light", "Dark"], index=1, key="theme_mode")
 set_theme_css(theme_choice)
 
-# ----------- Wide layout and card styles -----------
+# -----------  layout and cards -----------
 
 st.set_page_config(layout="wide")
 st.markdown("""
@@ -209,7 +209,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------- Your existing ML and UI functions below -----------
+# -----------  ML and UI  -----------
 
 IMG_SIZE = 224
 MODEL_PATH = "models/best_resnet50.pth"
@@ -225,7 +225,7 @@ def download_model_if_missing(gdrive_id):
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     url = f"https://drive.google.com/uc?id={gdrive_id}"
     try:
-        st.info("📥 Downloading model from Google Drive ...")
+        st.info(" Downloading model from Google Drive ...")
         gdown.download(url, MODEL_PATH, quiet=False)
         return os.path.exists(MODEL_PATH)
     except Exception as e:
@@ -370,15 +370,15 @@ def draw_confidence_gauge(confidence, label):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# ----------- App heading and intro -----------
+# ----------- App heading -----------
 st.markdown("""
     <div style='display:flex;align-items:center;justify-content:space-between;padding:1.3em 2.2em 1em 0em;background:rgba(8,16,32,0.12);border-radius:22px;margin-bottom:1.5em;font-family: Montserrat, sans-serif;'>
-        <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Receipt Forgery Detector</div>
+        <div style='font-weight:700;font-size:2em;letter-spacing:1px; color:#60c1e3;'>🧾 Document Forgery Detector(Receipt(s))</div>
         <a style='color:#60c1e3;text-decoration:none;font-size:1.15em;' href='https://github.com/Sridharan777' target='_blank'>GitHub</a>
     </div>
 """, unsafe_allow_html=True)
 
-st.markdown("<p style='color:#d1d5db;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect forgery with deep learning and visual Grad-CAM explanations.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#d1d5db;font-size:1.23em;margin-bottom:1.7em;font-weight:500;'>Upload receipt image(s) to detect Forged or Genuine (with visual Grad-CAM explanations)</p>", unsafe_allow_html=True)
 
 # ----------- Upload and history -----------
 if "upload_history" not in st.session_state:
@@ -400,7 +400,7 @@ with st.sidebar.expander("Upload History 🕒", expanded=False):
         st.write("No upload history yet.")
 
 # ----------- Model loading -----------
-with st.spinner("🧠 Loading detection model, please wait..."):
+with st.spinner(" Loading detection model, please wait..."):
     model = load_model()
 if model is None:
     st.stop()
@@ -436,7 +436,7 @@ if uploaded_files:
             with col3:
                 st.markdown(f"""
                     <div style='text-align:center; font-size:2em; font-weight:700; color:#60c1e3; letter-spacing:1px; margin-bottom:0.3em;'>
-                        🏆 Prediction Result
+                          Prediction Result
                     </div>
                     <div style='text-align:center; font-size:1.5em; font-weight:600; color:{ '#30e394' if label=='GENUINE' else '#ff5264' }; margin-bottom:0.3em;'>
                         {label} { '✓' if label == 'GENUINE' else '⚠️' }
